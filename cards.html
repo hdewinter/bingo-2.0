@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bingokaarten maken</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="bingo-common.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body{ padding: 20px; }
+  .wrap{ max-width: 1100px; margin: 0 auto; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+  .back-link{ color:var(--gold-soft); font-family:'Oswald',sans-serif; font-size:13px; text-decoration:none; letter-spacing:0.05em; text-transform:uppercase; }
+  h1{ font-size: clamp(24px,4vw,34px); margin: 10px 0 20px 0; }
+
+  .gen-panel{ padding:22px; margin-bottom:24px; }
+  .gen-row{ display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end; }
+  .gen-field{ flex:1; min-width:160px; }
+  .gen-field input{ width:100%; }
+  .gen-error{ color:#ff8484; font-size:13px; margin-top:10px; min-height:16px; }
+
+  .actions-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+
+  /* Kaart-preview (scherm) */
+  .cards-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:18px; }
+  .bingo-card{
+    background:#fff; color:#0a1730; border-radius:12px; padding:12px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+  }
+  .bingo-card .card-label{
+    font-family:'Oswald', sans-serif; font-weight:700; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:#8f1526; margin-bottom:6px; text-align:center;
+  }
+  .bingo-grid{ display:grid; grid-template-columns: repeat(9, 1fr); gap:3px; }
+  .bingo-cell{
+    aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+    background:#f4efe3; border-radius:4px;
+    font-family:'Oswald', sans-serif; font-weight:700; font-size: clamp(9px, 1.4vw, 13px);
+    color:#0a1730;
+  }
+  .bingo-cell.empty{ background: transparent; }
+  .bingo-cell.free{ background:#0a1730; padding:2px; }
+  .bingo-cell.free img{ width:100%; height:100%; }
+  .card-footer{ display:flex; justify-content:center; margin-top:8px; }
+  .card-footer button{
+    font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600;
+    background:transparent; border:1px solid #c8203a33; color:#8f1526; border-radius:8px; padding:6px 10px; cursor:pointer;
+  }
+
+  /* Print-layout: 6 kaarten per A4 (2 kolommen x 3 rijen) */
+  .print-page{ display:none; }
+  @media print{
+    body{ background:#fff !important; }
+    .no-print{ display:none !important; }
+    .print-page{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(3, 1fr);
+      gap: 8mm;
+      width: 100%;
+      height: 100vh;
+      page-break-after: always;
+      padding: 8mm;
+    }
+    .print-page .bingo-card{ box-shadow:none; border:1px solid #ccc; }
+  }
+
+  /* Digitale volledig-scherm weergave van 1 kaart */
+  #singleView{
+    display:none;
+    position:fixed; inset:0; z-index:1000;
+    background: radial-gradient(ellipse at 50% 0%, #142a4d 0%, var(--navy-deep) 60%);
+    align-items:center; justify-content:center; padding: 20px;
+  }
+  #singleView.active{ display:flex; }
+  #singleView .bingo-card{ width:min(420px, 92vw); }
+  #singleView .bingo-cell{ font-size: clamp(14px, 3.4vw, 22px); }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="generatorView">
+  <div class="topbar">
+    <a href="index.html" class="back-link">&larr; Terug naar trekker</a>
+    <div class="brand"><div class="dot"></div><span>Digitale bingotrekker 2.0</span></div>
+  </div>
+  <h1>Bingokaarten maken</h1>
+
+  <div class="panel gen-panel">
+    <div class="gen-row">
+      <div class="gen-field">
+        <label for="cardCount">Aantal kaarten</label>
+        <input type="number" id="cardCount" value="24" min="1" max="300">
+      </div>
+      <button class="btn primary" id="generateBtn">Genereer kaarten</button>
+    </div>
+    <div class="gen-error" id="genError"></div>
+    <div class="field hint" style="margin-top:14px;">Kaarten gebruiken het standaard Belgisch bereik 1 t/m 90, 3 rijen x 9 kolommen, met een FREE-vakje (QR-code) in het midden. Elke kaart is uniek.</div>
+  </div>
+
+  <div class="actions-row no-print" id="actionsRow" style="display:none;">
+    <button class="btn gold" id="printBtn">Print / download PDF (6 per A4)</button>
+    <span class="field hint" id="countLabel" style="align-self:center;"></span>
+  </div>
+
+  <div class="cards-grid no-print" id="cardsGrid"></div>
+  <div id="printArea"></div>
+</div>
+
+<div id="singleView">
+  <div style="width:min(420px,92vw);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <button class="btn ghost" id="singleClose" style="padding:8px 14px; font-size:12px;">&larr; Sluiten</button>
+      <button class="btn gold" id="singleShare" style="padding:8px 14px; font-size:12px;">Link kopiëren</button>
+    </div>
+    <div class="bingo-card" id="singleCard"></div>
+    <div class="field hint" id="shareHint" style="text-align:center; margin-top:12px;"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const cardCountInput = document.getElementById('cardCount');
+  const generateBtn = document.getElementById('generateBtn');
+  const genError = document.getElementById('genError');
+  const cardsGrid = document.getElementById('cardsGrid');
+  const printArea = document.getElementById('printArea');
+  const actionsRow = document.getElementById('actionsRow');
+  const countLabel = document.getElementById('countLabel');
+  const printBtn = document.getElementById('printBtn');
+  const generatorView = document.getElementById('generatorView');
+  const singleView = document.getElementById('singleView');
+  const singleCard = document.getElementById('singleCard');
+  const singleClose = document.getElementById('singleClose');
+  const singleShare = document.getElementById('singleShare');
+  const shareHint = document.getElementById('shareHint');
+
+  let currentCards = [];
+  let currentSingleCard = null;
+
+  function buildCardDOM(card, index){
+    const wrap = document.createElement('div');
+    wrap.className = 'bingo-card';
+
+    const label = document.createElement('div');
+    label.className = 'card-label';
+    label.textContent = 'Kaart ' + (index + 1);
+    wrap.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'bingo-grid';
+
+    // Bouw 3x9 rooster; plaats nummers in de juiste kolom o.b.v. bereik, leeg anders, FREE in midden.
+    for(let r = 0; r < 3; r++){
+      const rowNums = r === 0 ? card.row1 : (r === 1 ? card.row2 : card.row3);
+      for(let c = 0; c < 9; c++){
+        const cell = document.createElement('div');
+        if(r === 1 && c === FREE_COL_INDEX){
+          cell.className = 'bingo-cell free';
+          const qrHolder = document.createElement('div');
+          cell.appendChild(qrHolder);
+          grid.appendChild(cell);
+          new QRCode(qrHolder, {
+            text: encodeCardQR(card),
+            width: 60, height: 60,
+            colorDark: '#0a1730', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+          continue;
+        }
+        const range = BINGO_COLUMNS[c];
+        const n = rowNums.find(x => x >= range.min && x <= range.max);
+        if(n !== undefined){
+          cell.className = 'bingo-cell';
+          cell.textContent = n;
+        } else {
+          cell.className = 'bingo-cell empty';
+        }
+        grid.appendChild(cell);
+      }
+    }
+    wrap.appendChild(grid);
+
+    const footer = document.createElement('div');
+    footer.className = 'card-footer no-print';
+    const viewBtn = document.createElement('button');
+    viewBtn.textContent = 'Digitaal bekijken';
+    viewBtn.onclick = () => openSingleView(card, index);
+    footer.appendChild(viewBtn);
+    wrap.appendChild(footer);
+
+    return wrap;
+  }
+
+  function renderCards(cards){
+    currentCards = cards;
+    cardsGrid.innerHTML = '';
+    printArea.innerHTML = '';
+    cards.forEach((card, i) => {
+      cardsGrid.appendChild(buildCardDOM(card, i));
+    });
+
+    // Print-paginas: 6 kaarten per A4
+    for(let i = 0; i < cards.length; i += 6){
+      const page = document.createElement('div');
+      page.className = 'print-page';
+      cards.slice(i, i+6).forEach((card, j) => {
+        page.appendChild(buildCardDOM(card, i + j));
+      });
+      printArea.appendChild(page);
+    }
+
+    actionsRow.style.display = cards.length ? 'flex' : 'none';
+    countLabel.textContent = cards.length + ' kaart' + (cards.length === 1 ? '' : 'en') + ' gegenereerd';
+  }
+
+  generateBtn.onclick = () => {
+    const n = parseInt(cardCountInput.value, 10);
+    if(!n || n < 1 || n > 300){ genError.textContent = 'Kies een geldig aantal (1 t/m 300).'; return; }
+    genError.textContent = '';
+    const cards = generateUniqueCards(n);
+    renderCards(cards);
+  };
+
+  printBtn.onclick = () => { window.print(); };
+
+  function openSingleView(card, index){
+    currentSingleCard = card;
+    singleCard.innerHTML = '';
+    singleCard.appendChild(buildCardDOM(card, index));
+    singleCard.querySelector('.card-footer').remove();
+    shareHint.textContent = '';
+    singleView.classList.add('active');
+  }
+  singleClose.onclick = () => { singleView.classList.remove('active'); };
+  singleShare.onclick = () => {
+    if(!currentSingleCard) return;
+    const url = window.location.origin + window.location.pathname.replace('cards.html','') + 'cards.html?view=' + encodeURIComponent(encodeCardQR(currentSingleCard));
+    navigator.clipboard.writeText(url).then(() => {
+      shareHint.textContent = 'Link gekopieerd — kan je delen met de speler.';
+    }).catch(() => {
+      shareHint.textContent = url;
+    });
+  };
+
+  // Digitale losse weergave via URL: cards.html?view=<CARD:...>
+  const params = new URLSearchParams(window.location.search);
+  const viewParam = params.get('view');
+  if(viewParam){
+    const card = decodeCardQR(decodeURIComponent(viewParam));
+    if(card){
+      generatorView.style.display = 'none';
+      openSingleView(card, 0);
+    }
+  }
+})();
+</script>
+</body>
+</html>
