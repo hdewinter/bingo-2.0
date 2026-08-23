@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bingo Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="bingo-common.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+  body{ padding: 20px; display:flex; justify-content:center; }
+  .wrap{ max-width: 480px; width:100%; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .back-link{ color:var(--gold-soft); font-family:'Oswald',sans-serif; font-size:13px; text-decoration:none; letter-spacing:0.05em; text-transform:uppercase; }
+  h1{ font-size: clamp(22px,4vw,30px); margin: 8px 0 4px 0; }
+  .subtitle{ color:var(--muted); font-family:'Inter',sans-serif; font-size:14px; margin-bottom:20px; }
+
+  .step-panel{ padding: 18px; margin-bottom:18px; }
+  .step-title{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .step-num{
+    width:26px; height:26px; border-radius:50%; background: var(--gold); color:var(--navy-deep);
+    display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; flex-shrink:0;
+  }
+  .step-title h2{ font-size:17px; }
+  .step-title.done .step-num{ background: var(--green); }
+
+  .scan-video-wrap{
+    position:relative; width:100%; aspect-ratio:1/1; border-radius:16px; overflow:hidden;
+    background:#000; border:2px solid var(--gold); margin-bottom:12px;
+  }
+  .scan-video-wrap video{ width:100%; height:100%; object-fit:cover; }
+  .scan-frame{ position:absolute; inset:12%; border:2px dashed var(--gold-soft); border-radius:12px; pointer-events:none; }
+  .scan-hint{ text-align:center; font-size:13px; color:var(--muted); }
+
+  .state-loaded{
+    text-align:center; padding: 20px; border-radius:14px; background: var(--navy-deep); border:1px solid var(--line);
+  }
+  .state-loaded .count{ font-family:'Anton',sans-serif; font-size:32px; color:var(--gold-soft); }
+  .state-loaded .label{ font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+
+  .result-box{ border-radius:14px; padding:18px; text-align:center; margin-top:14px; border:1px solid var(--line); background: var(--navy-panel); }
+  .result-box.win{ background: linear-gradient(180deg, rgba(47,174,102,0.25), rgba(47,174,102,0.08)); border-color: var(--green); }
+  .result-title{ font-family:'Anton', sans-serif; font-size:24px; margin-bottom:8px; }
+  .result-rows{ display:flex; gap:10px; justify-content:center; font-family:'Oswald',sans-serif; font-size:13px; flex-wrap:wrap; }
+  .result-rows span{ padding:6px 10px; border-radius:8px; border:1px solid var(--line); color:var(--muted); }
+  .result-rows span.ok{ color: var(--navy-deep); background: var(--gold); border-color:transparent; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a href="index.html" class="back-link">&larr; Trekker</a>
+    <div class="brand"><div class="dot"></div><span>Bingo check</span></div>
+  </div>
+  <h1>Kaart checken</h1>
+  <div class="subtitle">Werkt volledig offline op dit toestel — geen internetverbinding nodig tussen de toestellen.</div>
+
+  <div class="panel step-panel">
+    <div class="step-title" id="step1Title"><div class="step-num">1</div><h2>Scan de trekking-QR</h2></div>
+    <div id="step1Scan">
+      <div class="scan-video-wrap">
+        <video id="stateVideo" playsinline muted></video>
+        <div class="scan-frame"></div>
+      </div>
+      <div class="scan-hint" id="stateHint">Richt de camera op de trekking-QR die getoond wordt op het trekker-scherm (Check &rarr; "Toon trekking-QR").</div>
+    </div>
+    <div id="step1Loaded" style="display:none;">
+      <div class="state-loaded">
+        <div class="count" id="stateCount">0</div>
+        <div class="label">nummers geladen</div>
+      </div>
+      <div style="text-align:center; margin-top:12px;">
+        <button class="btn ghost" id="rescanStateBtn" style="font-size:12px; padding:10px 14px;">Trekking opnieuw scannen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel step-panel" id="step2Panel" style="opacity:0.4; pointer-events:none;">
+    <div class="step-title" id="step2Title"><div class="step-num">2</div><h2>Scan de bingokaart</h2></div>
+    <div class="scan-video-wrap">
+      <video id="cardVideo" playsinline muted></video>
+      <div class="scan-frame"></div>
+    </div>
+    <div class="scan-hint" id="cardHint">Richt de camera op de QR-code in het midden van de bingokaart.</div>
+    <div id="cardResult"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const step1Scan = document.getElementById('step1Scan');
+  const step1Loaded = document.getElementById('step1Loaded');
+  const step1Title = document.getElementById('step1Title');
+  const stateVideo = document.getElementById('stateVideo');
+  const stateHint = document.getElementById('stateHint');
+  const stateCount = document.getElementById('stateCount');
+  const rescanStateBtn = document.getElementById('rescanStateBtn');
+
+  const step2Panel = document.getElementById('step2Panel');
+  const step2Title = document.getElementById('step2Title');
+  const cardVideo = document.getElementById('cardVideo');
+  const cardHint = document.getElementById('cardHint');
+  const cardResult = document.getElementById('cardResult');
+
+  let drawnSet = new Set();
+  let stateStream = null, stateRAF = null;
+  let cardStream = null, cardRAF = null;
+  let lastCardKey = null;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function scanLoop(video, onCode, getRAF, setRAF){
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imgData.data, imgData.width, imgData.height);
+      if(code && code.data){ onCode(code.data); }
+    }
+  }
+
+  function startStateCamera(){
+    step1Scan.style.display = 'block';
+    step1Loaded.style.display = 'none';
+    step2Panel.style.opacity = '0.4';
+    step2Panel.style.pointerEvents = 'none';
+    stopCardCamera();
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        stateStream = stream;
+        stateVideo.srcObject = stream;
+        stateVideo.play();
+        const tick = () => {
+          scanLoop(stateVideo, (data) => {
+            const nums = decodeStateQR(data);
+            if(nums){
+              drawnSet = new Set(nums);
+              stopStateCamera();
+              step1Scan.style.display = 'none';
+              step1Loaded.style.display = 'block';
+              step1Title.classList.add('done');
+              stateCount.textContent = drawnSet.size;
+              step2Panel.style.opacity = '1';
+              step2Panel.style.pointerEvents = 'auto';
+              startCardCamera();
+            } else if(data.startsWith('CARD:')){
+              stateHint.textContent = 'Dit is een kaart-QR, geen trekking. Scan eerst de trekking-QR op het trekker-scherm.';
+            }
+          });
+          stateRAF = requestAnimationFrame(tick);
+        };
+        stateRAF = requestAnimationFrame(tick);
+      })
+      .catch(() => { stateHint.textContent = 'Kon de camera niet openen. Geef camera-toegang toe in je browserinstellingen.'; });
+  }
+  function stopStateCamera(){
+    if(stateRAF){ cancelAnimationFrame(stateRAF); stateRAF = null; }
+    if(stateStream){ stateStream.getTracks().forEach(t => t.stop()); stateStream = null; }
+  }
+
+  function startCardCamera(){
+    lastCardKey = null;
+    cardResult.innerHTML = '';
+    cardHint.textContent = 'Richt de camera op de QR-code in het midden van de bingokaart.';
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        cardStream = stream;
+        cardVideo.srcObject = stream;
+        cardVideo.play();
+        const tick = () => {
+          scanLoop(cardVideo, (data) => {
+            if(data === lastCardKey) return;
+            const card = decodeCardQR(data);
+            if(card){
+              lastCardKey = data;
+              showCardResult(card);
+            } else if(data.startsWith('STATE:')){
+              cardHint.textContent = 'Dit is een trekking-QR, geen kaart. Scan de QR op de bingokaart zelf.';
+            }
+          });
+          cardRAF = requestAnimationFrame(tick);
+        };
+        cardRAF = requestAnimationFrame(tick);
+      })
+      .catch(() => { cardHint.textContent = 'Kon de camera niet openen. Geef camera-toegang toe in je browserinstellingen.'; });
+  }
+  function stopCardCamera(){
+    if(cardRAF){ cancelAnimationFrame(cardRAF); cardRAF = null; }
+    if(cardStream){ cardStream.getTracks().forEach(t => t.stop()); cardStream = null; }
+  }
+
+  function showCardResult(card){
+    const res = checkCardAgainstDrawn(card, drawnSet);
+    let title, cls = '';
+    if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
+    else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
+    else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
+    else{ title = 'Nog geen lijn'; }
+
+    cardResult.innerHTML = `
+      <div class="result-box ${cls}">
+        <div class="result-title">${title}</div>
+        <div class="result-rows">
+          <span class="${res.row1Complete ? 'ok' : ''}">Rij 1 ${res.row1Complete ? '✓' : ''}</span>
+          <span class="${res.row2Complete ? 'ok' : ''}">Rij 2 ${res.row2Complete ? '✓' : ''}</span>
+          <span class="${res.row3Complete ? 'ok' : ''}">Rij 3 ${res.row3Complete ? '✓' : ''}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  rescanStateBtn.onclick = () => { startStateCamera(); };
+
+  startStateCamera();
+})();
+</script>
+</body>
+</html>
