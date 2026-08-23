@@ -44,6 +44,14 @@
   .bingo-cell.empty{ background: transparent; }
   .bingo-cell.free{ background:#0a1730; padding:2px; }
   .bingo-cell.free img{ width:100%; height:100%; }
+  .bingo-cell.interactive{ cursor:pointer; user-select:none; transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease; }
+  .bingo-cell.interactive:active{ transform: scale(0.9); }
+  .bingo-cell.marked{
+    background: radial-gradient(circle at 32% 28%, #ff5b6e 0%, #c8203a 55%, #8f1526 100%) !important;
+    color:#fff !important;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35), 0 3px 8px rgba(200,32,58,0.45);
+    transform: rotate(-3deg) scale(0.96);
+  }
   .card-footer{ display:flex; justify-content:center; margin-top:8px; }
   .card-footer button{
     font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600;
@@ -112,8 +120,9 @@
 
 <div id="singleView">
   <div style="width:min(420px,92vw);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:8px;">
       <button class="btn ghost" id="singleClose" style="padding:8px 14px; font-size:12px;">&larr; Sluiten</button>
+      <button class="btn ghost" id="clearMarksBtn" style="padding:8px 14px; font-size:12px;">Wis markeringen</button>
       <button class="btn gold" id="singleShare" style="padding:8px 14px; font-size:12px;">Link kopiëren</button>
     </div>
     <div class="bingo-card" id="singleCard"></div>
@@ -135,13 +144,14 @@
   const singleView = document.getElementById('singleView');
   const singleCard = document.getElementById('singleCard');
   const singleClose = document.getElementById('singleClose');
+  const clearMarksBtn = document.getElementById('clearMarksBtn');
   const singleShare = document.getElementById('singleShare');
   const shareHint = document.getElementById('shareHint');
 
   let currentCards = [];
   let currentSingleCard = null;
 
-  function buildCardDOM(card, index){
+  function buildCardDOM(card, index, interactive){
     const wrap = document.createElement('div');
     wrap.className = 'bingo-card';
 
@@ -176,6 +186,11 @@
         if(n !== undefined){
           cell.className = 'bingo-cell';
           cell.textContent = n;
+          if(interactive){
+            cell.classList.add('interactive');
+            cell.dataset.number = n;
+            cell.addEventListener('click', () => toggleMark(card, cell));
+          }
         } else {
           cell.className = 'bingo-cell empty';
         }
@@ -193,6 +208,33 @@
     wrap.appendChild(footer);
 
     return wrap;
+  }
+
+  function marksStorageKey(card){ return 'bingo2-marks:' + cardKey(card); }
+
+  function loadMarks(card){
+    try{
+      const raw = localStorage.getItem(marksStorageKey(card));
+      if(!raw) return new Set();
+      return new Set(JSON.parse(raw));
+    }catch(e){ return new Set(); }
+  }
+  function saveMarks(card, marksSet){
+    try{ localStorage.setItem(marksStorageKey(card), JSON.stringify(Array.from(marksSet))); }catch(e){}
+  }
+
+  let currentMarks = new Set();
+  function toggleMark(card, cell){
+    const n = Number(cell.dataset.number);
+    if(currentMarks.has(n)){ currentMarks.delete(n); cell.classList.remove('marked'); }
+    else{ currentMarks.add(n); cell.classList.add('marked'); }
+    saveMarks(card, currentMarks);
+  }
+  function applyMarks(){
+    singleCard.querySelectorAll('.bingo-cell.interactive').forEach(cell => {
+      const n = Number(cell.dataset.number);
+      cell.classList.toggle('marked', currentMarks.has(n));
+    });
   }
 
   function renderCards(cards){
@@ -229,13 +271,22 @@
 
   function openSingleView(card, index){
     currentSingleCard = card;
+    currentMarks = loadMarks(card);
     singleCard.innerHTML = '';
-    singleCard.appendChild(buildCardDOM(card, index));
-    singleCard.querySelector('.card-footer').remove();
+    const cardDOM = buildCardDOM(card, index, true);
+    cardDOM.querySelector('.card-footer').remove();
+    singleCard.appendChild(cardDOM);
+    applyMarks();
     shareHint.textContent = '';
     singleView.classList.add('active');
   }
   singleClose.onclick = () => { singleView.classList.remove('active'); };
+  clearMarksBtn.onclick = () => {
+    if(!currentSingleCard) return;
+    currentMarks = new Set();
+    saveMarks(currentSingleCard, currentMarks);
+    applyMarks();
+  };
   singleShare.onclick = () => {
     if(!currentSingleCard) return;
     const url = window.location.origin + window.location.pathname.replace('cards.html','') + 'cards.html?view=' + encodeURIComponent(encodeCardQR(currentSingleCard));
