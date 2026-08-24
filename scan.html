@@ -204,12 +204,26 @@
     if(cardStream){ cardStream.getTracks().forEach(t => t.stop()); cardStream = null; }
   }
 
-  function renderResultBox(res){
+  function renderResultBox(res, card, calledSet){
     let title, cls = '';
     if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
     else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
     else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
     else{ title = 'Nog geen lijn'; }
+
+    const grid = gridFromRows(card.row1, card.row2, card.row3);
+    let gridHTML = '<div class="check-grid">';
+    for(let r=0;r<3;r++){
+      for(let c=0;c<9;c++){
+        const v = grid[r][c];
+        if(v === null){ gridHTML += '<div class="check-cell empty"></div>'; }
+        else{
+          const hit = calledSet.has(v);
+          gridHTML += `<div class="check-cell ${hit ? 'hit' : 'miss'}">${v}</div>`;
+        }
+      }
+    }
+    gridHTML += '</div>';
 
     return `
       <div class="result-box ${cls}">
@@ -219,13 +233,14 @@
           <span class="${res.row2Complete ? 'ok' : ''}">Rij 2 ${res.row2Complete ? '✓' : ''}</span>
           <span class="${res.row3Complete ? 'ok' : ''}">Rij 3 ${res.row3Complete ? '✓' : ''}</span>
         </div>
+        ${gridHTML}
       </div>
     `;
   }
 
   function showCardResult(card){
     const res = checkCardAgainstDrawn(card, drawnSet);
-    cardResult.innerHTML = renderResultBox(res);
+    cardResult.innerHTML = renderResultBox(res, card, drawnSet);
   }
 
   codeCheckBtn.onclick = () => {
@@ -235,7 +250,7 @@
       return;
     }
     const res = checkCardAgainstDrawn(card, drawnSet);
-    codeResult.innerHTML = renderResultBox(res);
+    codeResult.innerHTML = renderResultBox(res, card, drawnSet);
   };
 
   rescanStateBtn.onclick = () => { startStateCamera(); };
