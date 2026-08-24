@@ -541,8 +541,9 @@
       <button class="check-close" id="checkClose">&times;</button>
     </div>
     <div class="check-tabs">
-      <div class="check-tab active" id="tabScan">Kaart scannen</div>
-      <div class="check-tab" id="tabState">Toon trekking-QR</div>
+      <div class="check-tab active" id="tabScan">Scannen</div>
+      <div class="check-tab" id="tabCode">Code intypen</div>
+      <div class="check-tab" id="tabState">Trekking-QR</div>
     </div>
 
     <div id="scanPane">
@@ -552,6 +553,15 @@
       </div>
       <div class="scan-hint" id="scanHint">Richt de camera op de QR-code op de bingokaart.</div>
       <div id="scanResult"></div>
+    </div>
+
+    <div id="codePane" style="display:none;">
+      <div class="field" style="margin-bottom:14px;">
+        <label for="codeInput">Code onder de kaart</label>
+        <input type="text" id="codeInput" placeholder="bv. K3F9P2-04" style="width:100%; text-transform:uppercase;">
+      </div>
+      <button class="btn gold" id="codeCheckBtn" style="width:100%;">Check</button>
+      <div id="codeResult"></div>
     </div>
 
     <div id="statePane" style="display:none;">
@@ -601,12 +611,17 @@
   const checkOverlay = document.getElementById('checkOverlay');
   const checkClose = document.getElementById('checkClose');
   const tabScan = document.getElementById('tabScan');
+  const tabCode = document.getElementById('tabCode');
   const tabState = document.getElementById('tabState');
   const scanPane = document.getElementById('scanPane');
+  const codePane = document.getElementById('codePane');
   const statePane = document.getElementById('statePane');
   const scanVideo = document.getElementById('scanVideo');
   const scanHint = document.getElementById('scanHint');
   const scanResult = document.getElementById('scanResult');
+  const codeInput = document.getElementById('codeInput');
+  const codeCheckBtn = document.getElementById('codeCheckBtn');
+  const codeResult = document.getElementById('codeResult');
   const qrStateCanvas = document.getElementById('qrStateCanvas');
   const qrStateCount = document.getElementById('qrStateCount');
 
@@ -931,20 +946,31 @@
   checkOverlay.addEventListener('click', (e) => { if(e.target === checkOverlay) closeCheckModal(); });
 
   function switchTab(which){
-    if(which === 'scan'){
-      tabScan.classList.add('active'); tabState.classList.remove('active');
-      scanPane.style.display = 'block'; statePane.style.display = 'none';
-      stopScanCamera();
-      startScanCamera();
-    } else {
-      tabState.classList.add('active'); tabScan.classList.remove('active');
-      statePane.style.display = 'block'; scanPane.style.display = 'none';
-      stopScanCamera();
-      renderStateQR();
-    }
+    tabScan.classList.toggle('active', which === 'scan');
+    tabCode.classList.toggle('active', which === 'code');
+    tabState.classList.toggle('active', which === 'state');
+    scanPane.style.display = which === 'scan' ? 'block' : 'none';
+    codePane.style.display = which === 'code' ? 'block' : 'none';
+    statePane.style.display = which === 'state' ? 'block' : 'none';
+
+    stopScanCamera();
+    if(which === 'scan'){ startScanCamera(); }
+    else if(which === 'state'){ renderStateQR(); }
+    else if(which === 'code'){ codeResult.innerHTML = ''; codeInput.value = ''; }
   }
   tabScan.onclick = () => switchTab('scan');
+  tabCode.onclick = () => switchTab('code');
   tabState.onclick = () => switchTab('state');
+
+  codeCheckBtn.onclick = () => {
+    const card = decodeTextCode(codeInput.value);
+    if(!card){
+      codeResult.innerHTML = '<div class="scan-hint">Ongeldige code. Controleer de spelling (bv. K3F9P2-04).</div>';
+      return;
+    }
+    const res = checkCardAgainstDrawn(card, called);
+    codeResult.innerHTML = renderResultBox(res);
+  };
 
   function renderStateQR(){
     const text = encodeStateQR(Array.from(called));
@@ -997,15 +1023,14 @@
     scanRAF = requestAnimationFrame(scanTick);
   }
 
-  function showScanResult(card){
-    const res = checkCardAgainstDrawn(card, called);
+  function renderResultBox(res){
     let title, cls = '';
     if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
     else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
     else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
     else{ title = 'Nog geen lijn'; }
 
-    scanResult.innerHTML = `
+    return `
       <div class="result-box ${cls}">
         <div class="result-title">${title}</div>
         <div class="result-rows">
@@ -1015,6 +1040,11 @@
         </div>
       </div>
     `;
+  }
+
+  function showScanResult(card){
+    const res = checkCardAgainstDrawn(card, called);
+    scanResult.innerHTML = renderResultBox(res);
     scanHint.textContent = 'Scan een andere kaart, of sluit het venster.';
   }
 })();
