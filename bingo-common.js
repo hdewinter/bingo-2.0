@@ -110,6 +110,16 @@ function generateStripFromSeed(seed){
 function rowsFromGrid(grid){
   return grid.map(row => row.filter(n => n !== null));
 }
+function gridFromRows(row1, row2, row3){
+  const grid = Array.from({length:ROWS}, () => Array(COLS).fill(null));
+  [row1, row2, row3].forEach((row, r) => {
+    row.forEach(n => {
+      const c = BINGO_COLUMNS.findIndex(rng => n >= rng.min && n <= rng.max);
+      if(c >= 0) grid[r][c] = n;
+    });
+  });
+  return grid;
+}
 
 // Genereert `stripCount` strips (elk 6 kaarten, samen 1-90 dekkend), elk met eigen willekeurige seed.
 function generateStrips(stripCount){
@@ -200,4 +210,4 @@ function checkCardAgainstDrawn(card, calledSet){
   return { row1Complete, row2Complete, row3Complete, rowsComplete, fullCard: rowsComplete === 3 };
 }
 
-if(typeof module !== 'undefined'){ module.exports = { BINGO_COLUMNS, generateStrips, generateStripFromSeed, buildTicket, encodeTextCode, decodeTextCode, encodeCardQR, decodeCardQR, encodeStateQR, decodeStateQR, checkCardAgainstDrawn, randomSeed, mulberry32 }; }
+if(typeof module !== 'undefined'){ module.exports = { BINGO_COLUMNS, generateStrips, generateStripFromSeed, buildTicket, encodeTextCode, decodeTextCode, encodeCardQR, decodeCardQR, encodeStateQR, decodeStateQR, checkCardAgainstDrawn, randomSeed, mulberry32, gridFromRows }; }
