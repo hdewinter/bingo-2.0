@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="bingo-common.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="vendor-qrcode.min.js"></script>
 <style>
   body{ padding: 20px; }
   .wrap{ max-width: 1100px; margin: 0 auto; }
@@ -279,8 +279,13 @@
     const n = parseInt(stripCountInput.value, 10);
     if(!n || n < 1 || n > 50){ genError.textContent = 'Kies een geldig aantal (1 t/m 50).'; return; }
     genError.textContent = '';
-    const strips = generateStrips(n);
-    renderStrips(strips);
+    try{
+      const strips = generateStrips(n);
+      renderStrips(strips);
+    }catch(err){
+      console.error('Kaartgeneratie mislukt:', err);
+      genError.textContent = 'Er ging iets mis bij het genereren van de kaarten. Probeer de pagina te herladen.';
+    }
   };
 
   printBtn.onclick = () => { window.print(); };
