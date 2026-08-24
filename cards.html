@@ -22,10 +22,16 @@
   .gen-field input{ width:100%; }
   .gen-error{ color:#ff8484; font-size:13px; margin-top:10px; min-height:16px; }
 
-  .actions-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+  .actions-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px; align-items:center; }
 
-  /* Kaart-preview (scherm) */
-  .cards-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:18px; }
+  /* Strip = 1 A4-vel = 6 kaarten */
+  .strip-block{ margin-bottom:34px; }
+  .strip-title{
+    font-family:'Oswald', sans-serif; font-weight:700; font-size:13px; letter-spacing:0.08em; text-transform:uppercase;
+    color: var(--gold-soft); margin-bottom:12px;
+  }
+  .strip-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:16px; }
+
   .bingo-card{
     background:#fff; color:#0a1730; border-radius:12px; padding:12px;
     box-shadow: 0 10px 24px rgba(0,0,0,0.35);
@@ -50,9 +56,9 @@
     overflow:hidden;
   }
   .bingo-cell.empty{ background: transparent; }
-  .bingo-cell.free{ background:#0a1730; padding:2px; }
-  .bingo-cell.free > div{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
-  .bingo-cell.free img, .bingo-cell.free canvas{ width:100% !important; height:100% !important; max-width:100%; max-height:100%; }
+  .bingo-cell.qr{ background:#0a1730; padding:1px; }
+  .bingo-cell.qr > div{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .bingo-cell.qr img, .bingo-cell.qr canvas{ width:100% !important; height:100% !important; max-width:100%; max-height:100%; }
   .bingo-cell.interactive{ cursor:pointer; user-select:none; transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease; }
   .bingo-cell.interactive:active{ transform: scale(0.9); }
   .bingo-cell.marked{
@@ -61,16 +67,21 @@
     box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35), 0 3px 8px rgba(200,32,58,0.45);
     transform: rotate(-3deg) scale(0.96);
   }
+  .card-code{
+    text-align:center; margin-top:7px;
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:10.5px; letter-spacing:0.08em;
+    color:#7c8fae;
+  }
   .card-footer{ display:flex; justify-content:center; margin-top:8px; }
   .card-footer button{
     font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600;
     background:transparent; border:1px solid #c8203a33; color:#8f1526; border-radius:8px; padding:6px 10px; cursor:pointer;
   }
 
-  /* Print-layout: 6 kaarten per A4 (2 kolommen x 3 rijen) */
+  /* Print-layout: 6 kaarten per A4 (2 kolommen x 3 rijen) = exact 1 strip per pagina */
   .print-page{ display:none; }
   @media print{
-    body{ background:#fff !important; }
+    body{ background:#fff !important; padding:0 !important; }
     .no-print{ display:none !important; }
     .print-page{
       display:grid;
@@ -90,11 +101,12 @@
     display:none;
     position:fixed; inset:0; z-index:1000;
     background: radial-gradient(ellipse at 50% 0%, #142a4d 0%, var(--navy-deep) 60%);
-    align-items:center; justify-content:center; padding: 20px;
+    align-items:center; justify-content:center; padding: 20px; overflow-y:auto;
   }
   #singleView.active{ display:flex; }
   #singleView .bingo-card{ width:min(420px, 92vw); }
   #singleView .bingo-cell{ font-size: clamp(14px, 3.4vw, 22px); }
+  #singleView .card-code{ font-size:13px; margin-top:12px; }
 </style>
 </head>
 <body>
@@ -109,21 +121,23 @@
   <div class="panel gen-panel">
     <div class="gen-row">
       <div class="gen-field">
-        <label for="cardCount">Aantal kaarten</label>
-        <input type="number" id="cardCount" value="24" min="1" max="300">
+        <label for="stripCount">Aantal A4-vellen (elk = 6 kaarten)</label>
+        <input type="number" id="stripCount" value="4" min="1" max="50">
       </div>
       <button class="btn primary" id="generateBtn">Genereer kaarten</button>
     </div>
     <div class="gen-error" id="genError"></div>
-    <div class="field hint" style="margin-top:14px;">Kaarten gebruiken het standaard Belgisch bereik 1 t/m 90, 3 rijen x 9 kolommen, met een FREE-vakje (QR-code) in het midden. Elke kaart is uniek.</div>
+    <div class="field hint" style="margin-top:14px;">
+      Elk A4-vel bevat 6 kaarten die <strong>samen exact de nummers 1 t/m 90 dekken</strong> — elk nummer precies één keer. Zo heeft elk vel bij elk getrokken nummer altijd ergens een hit. Kolommen volgen de tientallen (1-9, 10-19, ... 80-90), net als een klassieke bingokaart. De QR-code staat op een willekeurig leeg vakje; onder elke kaart staat ook een korte code om zonder camera te verifiëren.
+    </div>
   </div>
 
   <div class="actions-row no-print" id="actionsRow" style="display:none;">
     <button class="btn gold" id="printBtn">Print / download PDF (6 per A4)</button>
-    <span class="field hint" id="countLabel" style="align-self:center;"></span>
+    <span class="field hint" id="countLabel"></span>
   </div>
 
-  <div class="cards-grid no-print" id="cardsGrid"></div>
+  <div id="stripsArea"></div>
   <div id="printArea"></div>
 </div>
 
@@ -141,10 +155,10 @@
 
 <script>
 (function(){
-  const cardCountInput = document.getElementById('cardCount');
+  const stripCountInput = document.getElementById('stripCount');
   const generateBtn = document.getElementById('generateBtn');
   const genError = document.getElementById('genError');
-  const cardsGrid = document.getElementById('cardsGrid');
+  const stripsArea = document.getElementById('stripsArea');
   const printArea = document.getElementById('printArea');
   const actionsRow = document.getElementById('actionsRow');
   const countLabel = document.getElementById('countLabel');
@@ -157,48 +171,48 @@
   const singleShare = document.getElementById('singleShare');
   const shareHint = document.getElementById('shareHint');
 
-  let currentCards = [];
-  let currentSingleCard = null;
+  let currentSingleTicket = null;
+  let currentMarks = new Set();
 
-  function buildCardDOM(card, index, interactive){
+  function buildCardDOM(ticket, globalIndex, interactive){
     const wrap = document.createElement('div');
     wrap.className = 'bingo-card';
 
     const label = document.createElement('div');
     label.className = 'card-label';
-    label.textContent = 'Kaart ' + (index + 1);
+    label.textContent = 'Kaart ' + (globalIndex + 1);
     wrap.appendChild(label);
 
     const grid = document.createElement('div');
     grid.className = 'bingo-grid';
 
-    // Bouw 3x9 rooster; plaats nummers in de juiste kolom o.b.v. bereik, leeg anders, FREE in midden.
-    for(let r = 0; r < 3; r++){
-      const rowNums = r === 0 ? card.row1 : (r === 1 ? card.row2 : card.row3);
-      for(let c = 0; c < 9; c++){
+    for(let r=0;r<3;r++){
+      for(let c=0;c<9;c++){
         const cell = document.createElement('div');
-        if(r === 1 && c === FREE_COL_INDEX){
-          cell.className = 'bingo-cell free';
+        const isQR = (ticket.qrCell.r === r && ticket.qrCell.c === c);
+        const val = ticket.grid[r][c];
+
+        if(isQR){
+          cell.className = 'bingo-cell qr';
           const qrHolder = document.createElement('div');
           cell.appendChild(qrHolder);
           grid.appendChild(cell);
           new QRCode(qrHolder, {
-            text: encodeCardQR(card),
+            text: encodeCardQR(ticket),
             width: 60, height: 60,
             colorDark: '#0a1730', colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M
           });
           continue;
         }
-        const range = BINGO_COLUMNS[c];
-        const n = rowNums.find(x => x >= range.min && x <= range.max);
-        if(n !== undefined){
+
+        if(val !== null){
           cell.className = 'bingo-cell';
-          cell.textContent = n;
+          cell.textContent = val;
           if(interactive){
             cell.classList.add('interactive');
-            cell.dataset.number = n;
-            cell.addEventListener('click', () => toggleMark(card, cell));
+            cell.dataset.number = val;
+            cell.addEventListener('click', () => toggleMark(cell));
           }
         } else {
           cell.className = 'bingo-cell empty';
@@ -208,36 +222,87 @@
     }
     wrap.appendChild(grid);
 
+    const codeLine = document.createElement('div');
+    codeLine.className = 'card-code';
+    codeLine.textContent = 'Code: ' + ticket.code;
+    wrap.appendChild(codeLine);
+
     const footer = document.createElement('div');
     footer.className = 'card-footer no-print';
     const viewBtn = document.createElement('button');
     viewBtn.textContent = 'Digitaal bekijken';
-    viewBtn.onclick = () => openSingleView(card, index);
+    viewBtn.onclick = () => openSingleView(ticket, globalIndex);
     footer.appendChild(viewBtn);
     wrap.appendChild(footer);
 
     return wrap;
   }
 
-  function marksStorageKey(card){ return 'bingo2-marks:' + cardKey(card); }
+  function renderStrips(strips){
+    stripsArea.innerHTML = '';
+    printArea.innerHTML = '';
+    let globalIndex = 0;
+    let totalCards = 0;
 
-  function loadMarks(card){
+    strips.forEach((strip, si) => {
+      totalCards += strip.tickets.length;
+
+      const block = document.createElement('div');
+      block.className = 'strip-block';
+      const title = document.createElement('div');
+      title.className = 'strip-title';
+      title.textContent = 'A4-vel ' + (si + 1) + ' — dekt volledig 1 t/m 90';
+      block.appendChild(title);
+
+      const sgrid = document.createElement('div');
+      sgrid.className = 'strip-grid';
+      strip.tickets.forEach((ticket) => {
+        sgrid.appendChild(buildCardDOM(ticket, globalIndex));
+        globalIndex++;
+      });
+      block.appendChild(sgrid);
+      stripsArea.appendChild(block);
+
+      // Print-pagina: exact deze strip van 6 kaarten
+      const page = document.createElement('div');
+      page.className = 'print-page';
+      let printIdx = si * 6;
+      strip.tickets.forEach((ticket) => {
+        page.appendChild(buildCardDOM(ticket, printIdx));
+        printIdx++;
+      });
+      printArea.appendChild(page);
+    });
+
+    actionsRow.style.display = totalCards ? 'flex' : 'none';
+    countLabel.textContent = strips.length + ' vel' + (strips.length===1?'':'len') + ' — ' + totalCards + ' kaarten totaal';
+  }
+
+  generateBtn.onclick = () => {
+    const n = parseInt(stripCountInput.value, 10);
+    if(!n || n < 1 || n > 50){ genError.textContent = 'Kies een geldig aantal (1 t/m 50).'; return; }
+    genError.textContent = '';
+    const strips = generateStrips(n);
+    renderStrips(strips);
+  };
+
+  printBtn.onclick = () => { window.print(); };
+
+  function marksStorageKey(ticket){ return 'bingo2-marks:' + ticket.code; }
+  function loadMarks(ticket){
     try{
-      const raw = localStorage.getItem(marksStorageKey(card));
-      if(!raw) return new Set();
-      return new Set(JSON.parse(raw));
+      const raw = localStorage.getItem(marksStorageKey(ticket));
+      return raw ? new Set(JSON.parse(raw)) : new Set();
     }catch(e){ return new Set(); }
   }
-  function saveMarks(card, marksSet){
-    try{ localStorage.setItem(marksStorageKey(card), JSON.stringify(Array.from(marksSet))); }catch(e){}
+  function saveMarks(ticket, marksSet){
+    try{ localStorage.setItem(marksStorageKey(ticket), JSON.stringify(Array.from(marksSet))); }catch(e){}
   }
-
-  let currentMarks = new Set();
-  function toggleMark(card, cell){
+  function toggleMark(cell){
     const n = Number(cell.dataset.number);
     if(currentMarks.has(n)){ currentMarks.delete(n); cell.classList.remove('marked'); }
     else{ currentMarks.add(n); cell.classList.add('marked'); }
-    saveMarks(card, currentMarks);
+    saveMarks(currentSingleTicket, currentMarks);
   }
   function applyMarks(){
     singleCard.querySelectorAll('.bingo-cell.interactive').forEach(cell => {
@@ -246,44 +311,13 @@
     });
   }
 
-  function renderCards(cards){
-    currentCards = cards;
-    cardsGrid.innerHTML = '';
-    printArea.innerHTML = '';
-    cards.forEach((card, i) => {
-      cardsGrid.appendChild(buildCardDOM(card, i));
-    });
-
-    // Print-paginas: 6 kaarten per A4
-    for(let i = 0; i < cards.length; i += 6){
-      const page = document.createElement('div');
-      page.className = 'print-page';
-      cards.slice(i, i+6).forEach((card, j) => {
-        page.appendChild(buildCardDOM(card, i + j));
-      });
-      printArea.appendChild(page);
-    }
-
-    actionsRow.style.display = cards.length ? 'flex' : 'none';
-    countLabel.textContent = cards.length + ' kaart' + (cards.length === 1 ? '' : 'en') + ' gegenereerd';
-  }
-
-  generateBtn.onclick = () => {
-    const n = parseInt(cardCountInput.value, 10);
-    if(!n || n < 1 || n > 300){ genError.textContent = 'Kies een geldig aantal (1 t/m 300).'; return; }
-    genError.textContent = '';
-    const cards = generateUniqueCards(n);
-    renderCards(cards);
-  };
-
-  printBtn.onclick = () => { window.print(); };
-
-  function openSingleView(card, index){
-    currentSingleCard = card;
-    currentMarks = loadMarks(card);
+  function openSingleView(ticket, index){
+    currentSingleTicket = ticket;
+    currentMarks = loadMarks(ticket);
     singleCard.innerHTML = '';
-    const cardDOM = buildCardDOM(card, index, true);
-    cardDOM.querySelector('.card-footer').remove();
+    const cardDOM = buildCardDOM(ticket, index, true);
+    const footer = cardDOM.querySelector('.card-footer');
+    if(footer) footer.remove();
     singleCard.appendChild(cardDOM);
     applyMarks();
     shareHint.textContent = '';
@@ -291,29 +325,41 @@
   }
   singleClose.onclick = () => { singleView.classList.remove('active'); };
   clearMarksBtn.onclick = () => {
-    if(!currentSingleCard) return;
+    if(!currentSingleTicket) return;
     currentMarks = new Set();
-    saveMarks(currentSingleCard, currentMarks);
+    saveMarks(currentSingleTicket, currentMarks);
     applyMarks();
   };
   singleShare.onclick = () => {
-    if(!currentSingleCard) return;
-    const url = window.location.origin + window.location.pathname.replace('cards.html','') + 'cards.html?view=' + encodeURIComponent(encodeCardQR(currentSingleCard));
+    if(!currentSingleTicket) return;
+    const url = window.location.origin + window.location.pathname.replace('cards.html','') + 'cards.html?view=' + encodeURIComponent(encodeCardQR(currentSingleTicket)) + '&code=' + encodeURIComponent(currentSingleTicket.code);
     navigator.clipboard.writeText(url).then(() => {
       shareHint.textContent = 'Link gekopieerd — kan je delen met de speler.';
-    }).catch(() => {
-      shareHint.textContent = url;
-    });
+    }).catch(() => { shareHint.textContent = url; });
   };
 
-  // Digitale losse weergave via URL: cards.html?view=<CARD:...>
+  // Digitale losse weergave via URL: cards.html?view=<CARD:...>&code=<code>
   const params = new URLSearchParams(window.location.search);
   const viewParam = params.get('view');
   if(viewParam){
-    const card = decodeCardQR(decodeURIComponent(viewParam));
-    if(card){
+    const cardData = decodeCardQR(decodeURIComponent(viewParam));
+    if(cardData){
       generatorView.style.display = 'none';
-      openSingleView(card, 0);
+      const fakeTicket = {
+        row1: cardData.row1, row2: cardData.row2, row3: cardData.row3,
+        code: params.get('code') || '—',
+        grid: null, qrCell: null
+      };
+      // Herbouw grid voor weergave o.b.v. de rijen (kolomindeling herafleiden)
+      fakeTicket.grid = Array.from({length:3}, () => Array(9).fill(null));
+      [cardData.row1, cardData.row2, cardData.row3].forEach((row, r) => {
+        row.forEach(n => {
+          const c = BINGO_COLUMNS.findIndex(rng => n >= rng.min && n <= rng.max);
+          if(c >= 0) fakeTicket.grid[r][c] = n;
+        });
+      });
+      fakeTicket.qrCell = { r: -1, c: -1 }; // geen QR nodig in gedeelde weergave, kaart is al 'ontgrendeld'
+      openSingleView(fakeTicket, 0);
     }
   }
 })();
