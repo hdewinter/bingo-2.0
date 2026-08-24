@@ -85,6 +85,15 @@
     </div>
     <div class="scan-hint" id="cardHint">Richt de camera op de QR-code in het midden van de bingokaart.</div>
     <div id="cardResult"></div>
+
+    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
+      <div class="field" style="margin-bottom:10px;">
+        <label for="codeInput">Of typ de code onder de kaart in</label>
+        <input type="text" id="codeInput" placeholder="bv. K3F9P2-04" style="width:100%; text-transform:uppercase;">
+      </div>
+      <button class="btn gold" id="codeCheckBtn" style="width:100%;">Check</button>
+      <div id="codeResult"></div>
+    </div>
   </div>
 </div>
 
@@ -103,6 +112,9 @@
   const cardVideo = document.getElementById('cardVideo');
   const cardHint = document.getElementById('cardHint');
   const cardResult = document.getElementById('cardResult');
+  const codeInput = document.getElementById('codeInput');
+  const codeCheckBtn = document.getElementById('codeCheckBtn');
+  const codeResult = document.getElementById('codeResult');
 
   let drawnSet = new Set();
   let stateStream = null, stateRAF = null;
@@ -192,15 +204,14 @@
     if(cardStream){ cardStream.getTracks().forEach(t => t.stop()); cardStream = null; }
   }
 
-  function showCardResult(card){
-    const res = checkCardAgainstDrawn(card, drawnSet);
+  function renderResultBox(res){
     let title, cls = '';
     if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
     else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
     else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
     else{ title = 'Nog geen lijn'; }
 
-    cardResult.innerHTML = `
+    return `
       <div class="result-box ${cls}">
         <div class="result-title">${title}</div>
         <div class="result-rows">
@@ -211,6 +222,21 @@
       </div>
     `;
   }
+
+  function showCardResult(card){
+    const res = checkCardAgainstDrawn(card, drawnSet);
+    cardResult.innerHTML = renderResultBox(res);
+  }
+
+  codeCheckBtn.onclick = () => {
+    const card = decodeTextCode(codeInput.value);
+    if(!card){
+      codeResult.innerHTML = '<div class="scan-hint">Ongeldige code. Controleer de spelling (bv. K3F9P2-04).</div>';
+      return;
+    }
+    const res = checkCardAgainstDrawn(card, drawnSet);
+    codeResult.innerHTML = renderResultBox(res);
+  };
 
   rescanStateBtn.onclick = () => { startStateCamera(); };
 
