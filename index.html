@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="bingo-common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
   :root{
     --navy-deep: #0a1730;
@@ -21,6 +21,7 @@
     --cream: #f4efe3;
     --muted: #7c8fae;
     --line: rgba(212,175,55,0.25);
+    --green: #2fae66;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{
@@ -371,6 +372,19 @@
   .result-rows span{ padding:6px 10px; border-radius:8px; border:1px solid var(--line); color:var(--muted); }
   .result-rows span.ok{ color: var(--navy-deep); background: var(--gold); border-color:transparent; }
 
+  .check-grid{
+    display:grid; grid-template-columns: repeat(9, minmax(0,1fr)); gap:3px;
+    margin-top: 14px; width:100%;
+  }
+  .check-cell{
+    aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+    border-radius:4px; font-family:'Oswald',sans-serif; font-weight:700;
+    font-size: clamp(9px, 2.6vw, 13px); min-width:0; min-height:0; box-sizing:border-box;
+  }
+  .check-cell.empty{ background:transparent; }
+  .check-cell.hit{ background: linear-gradient(180deg, #4ad080, var(--green)); color:#0a1730; }
+  .check-cell.miss{ background: linear-gradient(180deg, #ff5b6e, var(--red-dark)); color:#fff; }
+
   #qrStateBox{ display:flex; flex-direction:column; align-items:center; gap:12px; }
   #qrStateCanvas{ background:#fff; padding:14px; border-radius:14px; }
   #qrStateCount{ font-family:'Oswald', sans-serif; color:var(--gold-soft); font-size:14px; letter-spacing:0.05em; text-transform:uppercase; }
@@ -566,7 +580,7 @@
 
     <div id="statePane" style="display:none;">
       <div id="qrStateBox">
-        <div id="qrStateCanvas"></div>
+        <canvas id="qrStateCanvas"></canvas>
         <div id="qrStateCount">0 nummers getrokken</div>
         <div class="scan-hint">Scan deze QR-code met een los toestel om de trekking daar te laden.</div>
       </div>
@@ -969,19 +983,16 @@
       return;
     }
     const res = checkCardAgainstDrawn(card, called);
-    codeResult.innerHTML = renderResultBox(res);
+    codeResult.innerHTML = renderResultBox(res, card, called);
   };
 
   function renderStateQR(){
     const text = encodeStateQR(Array.from(called));
     qrStateCount.textContent = called.size + ' nummer' + (called.size === 1 ? '' : 's') + ' getrokken';
-    qrStateCanvas.innerHTML = '';
-    qrStateInstance = new QRCode(qrStateCanvas, {
-      text: text,
-      width: 220, height: 220,
-      colorDark: '#0a1730', colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
+    QRCode.toCanvas(qrStateCanvas, text, {
+      width: 220, margin: 1,
+      color: { dark: '#0a1730', light: '#ffffff' }
+    }, function(err){ if(err) console.error('QR error:', err); });
   }
 
   function startScanCamera(){
@@ -1023,12 +1034,26 @@
     scanRAF = requestAnimationFrame(scanTick);
   }
 
-  function renderResultBox(res){
+  function renderResultBox(res, card, calledSet){
     let title, cls = '';
     if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
     else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
     else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
     else{ title = 'Nog geen lijn'; }
+
+    const grid = gridFromRows(card.row1, card.row2, card.row3);
+    let gridHTML = '<div class="check-grid">';
+    for(let r=0;r<3;r++){
+      for(let c=0;c<9;c++){
+        const v = grid[r][c];
+        if(v === null){ gridHTML += '<div class="check-cell empty"></div>'; }
+        else{
+          const hit = calledSet.has(v);
+          gridHTML += `<div class="check-cell ${hit ? 'hit' : 'miss'}">${v}</div>`;
+        }
+      }
+    }
+    gridHTML += '</div>';
 
     return `
       <div class="result-box ${cls}">
@@ -1038,13 +1063,14 @@
           <span class="${res.row2Complete ? 'ok' : ''}">Rij 2 ${res.row2Complete ? '✓' : ''}</span>
           <span class="${res.row3Complete ? 'ok' : ''}">Rij 3 ${res.row3Complete ? '✓' : ''}</span>
         </div>
+        ${gridHTML}
       </div>
     `;
   }
 
   function showScanResult(card){
     const res = checkCardAgainstDrawn(card, called);
-    scanResult.innerHTML = renderResultBox(res);
+    scanResult.innerHTML = renderResultBox(res, card, called);
     scanHint.textContent = 'Scan een andere kaart, of sluit het venster.';
   }
 })();
