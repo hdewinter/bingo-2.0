@@ -2,6 +2,26 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.0 — 2026-08-25
+### Nieuw: 4 officiële bingo-varianten
+De kaartgenerator vraagt niet langer om een handmatig getallenbereik, maar laat kiezen uit 4 officiële bingo-varianten (default: 90-bal Klassiek Europees). De trekker en checker bewegen automatisch mee met de gekozen variant.
+
+- **90-bal — Klassiek Europees** (default, ongewijzigd): 3x9 kaart, 15 nummers, kolommen = tientallen. 1 A4-vel = 6 kaarten die samen exact 1-90 dekken. Winnen met 1 lijn, 2 lijnen of volle kaart.
+- **75-bal — Amerikaans (BINGO)**: 5x5 kaart, 24 nummers + gratis middenvakje, kolommen B-I-N-G-O (1-15/16-30/31-45/46-60/61-75). Winnen met een lijn (rij, kolom of diagonaal) of volle kaart (blackout). 4 kaarten per A4.
+- **80-bal — Shutter**: 4x4 kaart, 16 nummers, kolommen 1-20/21-40/41-60/61-80 in eigen kleur. Winnen met een lijn of volle kaart. 6 kaarten per A4.
+- **30-bal — Speed**: 3x3 kaart, 9 nummers (1-10/11-20/21-30), geen lege vakjes. Alleen te winnen met een volle kaart. 9 kaarten per A4.
+
+### Wat er onder de motorkap veranderde
+- `bingo-common.js`: nieuwe `BINGO_VARIANTS`-tabel met alle regels per variant; generieke kaartgeneratie (`generateRandomCard`/`generateCardsForVariant`) naast de bestaande 90-bal-strip-logica (ongewijzigd, blijft de enige variant waarbij kaarten op 1 vel samen het hele bereik dekken); generieke winst-check (`checkCardAgainstDrawn`) met rijen/kolommen/diagonalen afhankelijk van de variant; gedeelde `renderCheckResultHTML` zodat `index.html` en `scan.html` niet langer eigen (verouderde, 90-bal-only) kopieën van die logica hadden.
+- QR-codes en intypbare codes zijn nu variant-bewust (`CARD2:<variant>:...` resp. `US75-...`/`UK80-...`/`SPEED30-...`), maar blijven volledig achterwaarts compatibel: kaarten die vóór deze versie zijn afgedrukt (oude `CARD:`-QR en code zonder prefix) worden nog steeds correct herkend als 90-bal.
+- `cards.html`: variantkeuze bovenaan; bij 90-bal blijft "aantal A4-vellen" de invoer, bij de andere 3 varianten wordt dat "aantal kaarten" (altijd volle A4-vellen per pagina).
+- `index.html`: het handmatige "hoogste nummer"-veld is vervangen door dezelfde 4 variantknoppen; de trekker trekt nu automatisch uit het juiste bereik (30/75/80/90) en de check-modal toont per variant het juiste kaartformaat (incl. BINGO-letters en gratis vakje voor 75-bal).
+
+### Fix (kwam boven drijven tijdens dit werk)
+- Op `cards.html` verscheen bij printen/PDF-export ongewenst een stuk van de pagina (topbalk, titel, invoerpaneel) boven de eerste kaart, en de pagina-einde per A4-vel werkte niet betrouwbaar. Opgelost: alleen de daadwerkelijke afdrukpagina's zijn nu zichtbaar bij printen (`@media print` verbergt nu ook de topbalk/titel/paneel, niet alleen de knoppenbalk), en `break-after: page` is toegevoegd naast `page-break-after` voor betrouwbaardere paginering.
+
+---
+
 ## v1.5 — 2026-08-25
 ### Fix
 - Zelfde probleem als v1.4, maar dan in `index.html` en `scan.html`: de Trekking-QR (in de "Kaart checken"-modal) bleef een leeg wit vlak tonen, en het scannen via de camera kon stuk gaan, omdat `qrcode` en `jsQR` daar nog via externe CDN's (`cdn.jsdelivr.net`, `cdnjs.cloudflare.com`) werden geladen.

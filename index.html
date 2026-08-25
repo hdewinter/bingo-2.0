@@ -385,6 +385,17 @@
   .check-cell.hit{ background: linear-gradient(180deg, #4ad080, var(--green)); color:#0a1730; }
   .check-cell.miss{ background: linear-gradient(180deg, #ff5b6e, var(--red-dark)); color:#fff; }
 
+  .variant-select{ display:flex; flex-direction:column; gap:8px; }
+  .variant-opt{
+    text-align:left; padding:10px 14px; border-radius:10px;
+    border:1px solid var(--line); background:transparent; color:var(--cream); cursor:pointer;
+    font-family:'Oswald',sans-serif;
+  }
+  .variant-opt .v-title{ font-weight:700; font-size:13px; letter-spacing:0.03em; }
+  .variant-opt .v-sub{ font-size:11px; color:var(--muted); margin-top:2px; font-family:'Inter',sans-serif; }
+  .variant-opt.active{ border-color: var(--gold); background: linear-gradient(180deg, rgba(212,175,55,0.18), rgba(212,175,55,0.05)); }
+  .variant-opt.active .v-title{ color: var(--gold-soft); }
+
   #qrStateBox{ display:flex; flex-direction:column; align-items:center; gap:12px; }
   #qrStateCanvas{ background:#fff; padding:14px; border-radius:14px; }
   #qrStateCount{ font-family:'Oswald', sans-serif; color:var(--gold-soft); font-size:14px; letter-spacing:0.05em; text-transform:uppercase; }
@@ -461,13 +472,9 @@
       <h1>Instellingen</h1>
 
       <div class="field">
-        <label for="maxNumber">Hoogste nummer (bereik 1 t/m X)</label>
-        <div class="num-input">
-          <button type="button" id="maxMinus">–</button>
-          <input type="number" id="maxNumber" value="90" min="2" max="500">
-          <button type="button" id="maxPlus">+</button>
-        </div>
-        <div class="hint">Er wordt willekeurig getrokken tussen 1 en dit getal, elk nummer maar 1 keer.</div>
+        <label>Bingovariant</label>
+        <div class="variant-select" id="variantSelect"></div>
+        <div class="hint" id="variantHint"></div>
       </div>
 
       <div class="field">
@@ -590,10 +597,9 @@
 
 <script>
 (function(){
-  const maxInput = document.getElementById('maxNumber');
+  const variantSelect = document.getElementById('variantSelect');
+  const variantHint = document.getElementById('variantHint');
   const intInput = document.getElementById('interval');
-  const maxMinus = document.getElementById('maxMinus');
-  const maxPlus = document.getElementById('maxPlus');
   const intMinus = document.getElementById('intMinus');
   const intPlus = document.getElementById('intPlus');
   const startBtn = document.getElementById('startBtn');
@@ -642,6 +648,31 @@
   let midGameEdit = false;   // true wanneer we via 'Instellingen' vanuit een actief spel kwamen
   let pendingMax = null;
   let pendingInterval = null;
+  let pendingVariantId = null;
+
+  let currentVariantId = DEFAULT_VARIANT_ID;
+  let selectedVariantId = currentVariantId;
+  try{
+    const savedVariant = localStorage.getItem('bingo2-variant');
+    if(savedVariant && BINGO_VARIANTS[savedVariant]){ currentVariantId = savedVariant; selectedVariantId = savedVariant; }
+  }catch(e){}
+
+  Object.values(BINGO_VARIANTS).forEach(v => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'variant-opt';
+    btn.dataset.variant = v.id;
+    btn.innerHTML = '<div class="v-title">' + v.label + '</div><div class="v-sub">' + v.totalBalls + ' ballen \u00b7 ' + v.rows + 'x' + v.cols + ' kaart</div>';
+    btn.onclick = () => selectSettingsVariant(v.id);
+    variantSelect.appendChild(btn);
+  });
+  function selectSettingsVariant(id){
+    selectedVariantId = id;
+    variantSelect.querySelectorAll('.variant-opt').forEach(b => b.classList.toggle('active', b.dataset.variant === id));
+    variantHint.textContent = BINGO_VARIANTS[id].description;
+    try{ localStorage.setItem('bingo2-variant', id); }catch(e){}
+  }
+  selectSettingsVariant(selectedVariantId);
 
   const RING_R = 46;
   const RING_C = 2 * Math.PI * RING_R;
@@ -679,7 +710,7 @@
     cdRAF = requestAnimationFrame(cdTick);
   }
 
-  let maxNumber = 90;
+  let maxNumber = BINGO_VARIANTS[currentVariantId].totalBalls;
   let intervalSec = 8;
   let called = new Set();
   let pool = [];
@@ -702,8 +733,6 @@
     v = Math.max(min, Math.min(max, v));
     input.value = v;
   }
-  maxMinus.onclick = () => clampStep(maxInput, 2, 500, -1);
-  maxPlus.onclick = () => clampStep(maxInput, 2, 500, 1);
   intMinus.onclick = () => clampStep(intInput, 2, 120, -1);
   intPlus.onclick = () => clampStep(intInput, 2, 120, 1);
 
@@ -861,7 +890,7 @@
   backBtn.onclick = () => {
     stopAuto();
     midGameEdit = true;
-    maxInput.value = maxNumber;
+    selectSettingsVariant(currentVariantId);
     intInput.value = intervalSec;
     settingsError.textContent = '';
     startBtn.textContent = 'Ga verder';
@@ -870,16 +899,16 @@
   };
 
   startBtn.onclick = () => {
-    const m = parseInt(maxInput.value, 10);
+    const m = BINGO_VARIANTS[selectedVariantId].totalBalls;
     const iv = parseInt(intInput.value, 10);
-    if(!m || m < 2 || m > 500){ settingsError.textContent = 'Kies een geldig hoogste nummer (2 t/m 500).'; return; }
     if(!iv || iv < 2 || iv > 120){ settingsError.textContent = 'Kies een geldig interval (2 t/m 120 seconden).'; return; }
     settingsError.textContent = '';
 
     if(midGameEdit){
-      if(m !== maxNumber){
-        // Bereik gewijzigd tijdens een lopend spel -> eerst bevestigen, want dit reset alles.
+      if(selectedVariantId !== currentVariantId){
+        // Variant gewijzigd tijdens een lopend spel -> eerst bevestigen, want dit reset alles.
         pendingMax = m;
+        pendingVariantId = selectedVariantId;
         pendingInterval = iv;
         rangeResetOverlay.classList.add('active');
         return;
@@ -894,6 +923,7 @@
     }
 
     // Volledig nieuw spel (eerste start, of na een reset vanaf het settingsscherm).
+    currentVariantId = selectedVariantId;
     maxNumber = m;
     intervalSec = iv;
     called = new Set();
@@ -911,6 +941,7 @@
 
   rangeConfirmYes.onclick = () => {
     rangeResetOverlay.classList.remove('active');
+    currentVariantId = pendingVariantId;
     maxNumber = pendingMax;
     intervalSec = pendingInterval;
     called = new Set();
@@ -927,7 +958,7 @@
   };
   function cancelRangeChange(){
     rangeResetOverlay.classList.remove('active');
-    maxInput.value = maxNumber; // aantal terugzetten naar de huidige spelwaarde
+    selectSettingsVariant(currentVariantId); // selectie terugzetten naar de huidige spelwaarde
     midGameEdit = false;
     settingsScreen.style.display = 'none';
     gameScreen.classList.add('active');
@@ -983,7 +1014,7 @@
       return;
     }
     const res = checkCardAgainstDrawn(card, called);
-    codeResult.innerHTML = renderResultBox(res, card, called);
+    codeResult.innerHTML = renderCheckResultHTML(res, card, called);
   };
 
   function renderStateQR(){
@@ -1034,43 +1065,9 @@
     scanRAF = requestAnimationFrame(scanTick);
   }
 
-  function renderResultBox(res, card, calledSet){
-    let title, cls = '';
-    if(res.fullCard){ title = 'BINGO! Volle kaart!'; cls = 'win'; }
-    else if(res.rowsComplete === 2){ title = 'Lijn! (2 rijen)'; cls = 'win'; }
-    else if(res.rowsComplete === 1){ title = 'Lijn! (1 rij)'; cls = 'win'; }
-    else{ title = 'Nog geen lijn'; }
-
-    const grid = gridFromRows(card.row1, card.row2, card.row3);
-    let gridHTML = '<div class="check-grid">';
-    for(let r=0;r<3;r++){
-      for(let c=0;c<9;c++){
-        const v = grid[r][c];
-        if(v === null){ gridHTML += '<div class="check-cell empty"></div>'; }
-        else{
-          const hit = calledSet.has(v);
-          gridHTML += `<div class="check-cell ${hit ? 'hit' : 'miss'}">${v}</div>`;
-        }
-      }
-    }
-    gridHTML += '</div>';
-
-    return `
-      <div class="result-box ${cls}">
-        <div class="result-title">${title}</div>
-        <div class="result-rows">
-          <span class="${res.row1Complete ? 'ok' : ''}">Rij 1 ${res.row1Complete ? '✓' : ''}</span>
-          <span class="${res.row2Complete ? 'ok' : ''}">Rij 2 ${res.row2Complete ? '✓' : ''}</span>
-          <span class="${res.row3Complete ? 'ok' : ''}">Rij 3 ${res.row3Complete ? '✓' : ''}</span>
-        </div>
-        ${gridHTML}
-      </div>
-    `;
-  }
-
   function showScanResult(card){
     const res = checkCardAgainstDrawn(card, called);
-    scanResult.innerHTML = renderResultBox(res, card, called);
+    scanResult.innerHTML = renderCheckResultHTML(res, card, called);
     scanHint.textContent = 'Scan een andere kaart, of sluit het venster.';
   }
 })();
