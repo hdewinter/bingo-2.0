@@ -2,6 +2,18 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v1.5 — 2026-08-25
+### Fix
+- Zelfde probleem als v1.4, maar dan in `index.html` en `scan.html`: de Trekking-QR (in de "Kaart checken"-modal) bleef een leeg wit vlak tonen, en het scannen via de camera kon stuk gaan, omdat `qrcode` en `jsQR` daar nog via externe CDN's (`cdn.jsdelivr.net`, `cdnjs.cloudflare.com`) werden geladen.
+- **Oplossing:** `jsQR` is nu ook self-hosted als `vendor-jsqr.min.js`. Alle drie de pagina's (`index.html`, `cards.html`, `scan.html`) gebruiken nu uitsluitend lokale, self-hosted QR-bibliotheken — geen enkele externe netwerkafhankelijkheid meer voor QR-functionaliteit.
+
+### Gewijzigde bestanden
+- `index.html` — CDN-`<script>`-tags voor `jsQR` en `qrcode` vervangen door lokale `vendor-jsqr.min.js` en `vendor-qrcode.min.js`.
+- `scan.html` — CDN-`<script>`-tag voor `jsQR` vervangen door lokale `vendor-jsqr.min.js`.
+- `vendor-jsqr.min.js` — nieuw, self-hosted `jsQR@1.4.0` (kant-en-klare UMD-build van npm).
+
+---
+
 ## v1.4 — 2026-08-24
 ### Fix
 - **Kaartgeneratie werkte niet meer.** De vorige versie laadde de QR-codebibliotheek (`qrcode@1.5.4`) via het externe CDN `cdn.jsdelivr.net`. Zodra die laadopdracht faalde (netwerkblokkade, adblocker, offline gebruik, trage verbinding), gaf de browser de fout `QRCode is not defined`. Omdat deze fout niet werd opgevangen, brak het hele generatieproces af — er verschenen geen kaarten en er kwam geen foutmelding op het scherm.
