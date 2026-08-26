@@ -46,6 +46,13 @@
   .result-rows{ display:flex; gap:10px; justify-content:center; font-family:'Oswald',sans-serif; font-size:13px; flex-wrap:wrap; }
   .result-rows span{ padding:6px 10px; border-radius:8px; border:1px solid var(--line); color:var(--muted); }
   .result-rows span.ok{ color: var(--navy-deep); background: var(--gold); border-color:transparent; }
+
+  .ticket-btn{
+    width:52px; height:52px; border-radius:10px;
+    background: var(--navy-deep); border:1px solid var(--line); color:var(--cream);
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; cursor:pointer;
+  }
+  .ticket-btn.active{ background: var(--gold); color: var(--navy-deep); border-color:transparent; }
 </style>
 </head>
 <body>
@@ -83,8 +90,14 @@
       <video id="cardVideo" playsinline muted></video>
       <div class="scan-frame"></div>
     </div>
-    <div class="scan-hint" id="cardHint">Richt de camera op de QR-code in het midden van de bingokaart.</div>
+    <div class="scan-hint" id="cardHint">Richt de camera op de QR-code op de bingokaart (of de grote QR bovenaan het A4-vel).</div>
     <div id="cardResult"></div>
+
+    <div id="ticketPickerPane" style="display:none; margin-top:16px;">
+      <div class="scan-hint" style="margin-bottom:10px;">Dit vel heeft 6 kaarten — kies jouw kaartnummer:</div>
+      <div id="ticketPickerRow" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;"></div>
+      <div id="ticketPickerResult" style="margin-top:14px;"></div>
+    </div>
 
     <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
       <div class="field" style="margin-bottom:10px;">
@@ -112,6 +125,9 @@
   const cardVideo = document.getElementById('cardVideo');
   const cardHint = document.getElementById('cardHint');
   const cardResult = document.getElementById('cardResult');
+  const ticketPickerPane = document.getElementById('ticketPickerPane');
+  const ticketPickerRow = document.getElementById('ticketPickerRow');
+  const ticketPickerResult = document.getElementById('ticketPickerResult');
   const codeInput = document.getElementById('codeInput');
   const codeCheckBtn = document.getElementById('codeCheckBtn');
   const codeResult = document.getElementById('codeResult');
@@ -176,7 +192,10 @@
   function startCardCamera(){
     lastCardKey = null;
     cardResult.innerHTML = '';
-    cardHint.textContent = 'Richt de camera op de QR-code in het midden van de bingokaart.';
+    ticketPickerPane.style.display = 'none';
+    ticketPickerRow.innerHTML = '';
+    ticketPickerResult.innerHTML = '';
+    cardHint.textContent = 'Richt de camera op de QR-code op de bingokaart (of de grote QR bovenaan het A4-vel).';
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       .then(stream => {
         cardStream = stream;
@@ -185,9 +204,17 @@
         const tick = () => {
           scanLoop(cardVideo, (data) => {
             if(data === lastCardKey) return;
+            const strip = decodeStripQR(data);
+            if(strip){
+              lastCardKey = data;
+              showTicketPicker(strip);
+              return;
+            }
             const card = decodeCardQR(data);
             if(card){
               lastCardKey = data;
+              cardResult.innerHTML = '';
+              ticketPickerPane.style.display = 'none';
               showCardResult(card);
             } else if(data.startsWith('STATE:')){
               cardHint.textContent = 'Dit is een trekking-QR, geen kaart. Scan de QR op de bingokaart zelf.';
@@ -202,6 +229,26 @@
   function stopCardCamera(){
     if(cardRAF){ cancelAnimationFrame(cardRAF); cardRAF = null; }
     if(cardStream){ cardStream.getTracks().forEach(t => t.stop()); cardStream = null; }
+  }
+
+  function showTicketPicker(strip){
+    cardResult.innerHTML = '';
+    cardHint.textContent = 'Vel gescand \u2014 kies hieronder jouw kaartnummer.';
+    ticketPickerPane.style.display = 'block';
+    ticketPickerRow.innerHTML = '';
+    ticketPickerResult.innerHTML = '';
+    strip.tickets.forEach((ticket) => {
+      const btn = document.createElement('button');
+      btn.className = 'ticket-btn';
+      btn.textContent = String(ticket.ticketIndex + 1).padStart(2, '0');
+      btn.onclick = () => {
+        ticketPickerRow.querySelectorAll('.ticket-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const res = checkCardAgainstDrawn(ticket, drawnSet);
+        ticketPickerResult.innerHTML = renderCheckResultHTML(res, ticket, drawnSet);
+      };
+      ticketPickerRow.appendChild(btn);
+    });
   }
 
   function showCardResult(card){

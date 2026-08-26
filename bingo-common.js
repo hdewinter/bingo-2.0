@@ -308,6 +308,22 @@ function decodeCardQR(text){
   return null;
 }
 
+/* ---------- Vel-QR (1 grote QR per A4-vel, alleen 90-bal) ----------
+   Bevat enkel de gedeelde seed van de strip; alle 6 kaarten worden
+   daaruit opnieuw berekend (identiek aan hoe ze gegenereerd zijn). */
+function encodeStripQR(seed){
+  return 'STRIP:' + (seed >>> 0).toString(36).toUpperCase();
+}
+function decodeStripQR(text){
+  if(!text || !text.startsWith('STRIP:')) return null;
+  const seed = parseInt(text.slice(6), 36);
+  if(isNaN(seed)) return null;
+  const grids = generateStripFromSeed(seed >>> 0);
+  if(!grids) return null;
+  const tickets = grids.map((grid, i) => buildTicket(grid, seed, i));
+  return { seed, tickets };
+}
+
 function encodeStateQR(calledArray){
   return 'STATE:' + calledArray.slice().sort((a,b)=>a-b).join(',');
 }
@@ -422,6 +438,7 @@ if(typeof module !== 'undefined'){
     generateStrips, generateStripFromSeed, buildTicket,
     generateRandomCard, generateCardsForVariant, paginateCards,
     encodeTextCode, decodeTextCode, encodeCardQR, decodeCardQR,
+    encodeStripQR, decodeStripQR,
     encodeStateQR, decodeStateQR, checkCardAgainstDrawn, renderCheckResultHTML,
     randomSeed, mulberry32, gridFromRows, shuffleWith
   };

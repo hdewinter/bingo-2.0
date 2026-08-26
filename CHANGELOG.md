@@ -2,6 +2,28 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.3 — 2026-08-26
+### 90-bal: 1 grote QR per A4-vel i.p.v. 6 kleintjes (betrouwbaarder scannen + groter, opvallender kaarten)
+De losse QR-codes ingebed in elk van de 6 kaartjes op een vel waren op papier te klein om betrouwbaar te scannen (weinig witruimte eromheen, laag contrast bij kleinere printers). Alleen voor **90-bal** (waar alle 6 kaarten op een vel toch al uit dezelfde "seed" komen) is dit nu anders opgelost:
+
+- Bovenaan elk A4-vel staat nu **1 grote QR-code** (met flinke witruimte eromheen) die alleen de vel-code bevat (bv. `PNWEUF`). Daaruit worden alle 6 kaarten opnieuw berekend — exact dezelfde kaarten als toen ze gegenereerd zijn.
+- Elk kaartje op het vel heet nu **"Kaart 01" t/m "Kaart 06"** (i.p.v. doorlopend genummerd over alle vellen heen), zodat het nummer op de kaart exact overeenkomt met wat je straks in de app kiest.
+- Het vakje waar vroeger de kleine QR in stond is nu gewoon leeg — net als op een echte fysieke bingokaart.
+- De kaarten zelf zijn iets groter/voller weergegeven (grotere cijfers, minder verspilde witruimte onderaan), en passen nog steeds netjes op de A4-pagina (geverifieerd: geen overflow).
+- De kleine tekstcode onder elke kaart (bv. `PNWEUF-03`) blijft gewoon staan als reserve om handmatig in te typen.
+- **Nieuwe scan-flow op `scan.html`:** scan je de grote vel-QR, dan verschijnt een rij klikbare knoppen **01 t/m 06** — tik op jouw kaartnummer en de bijbehorende kaart + het checkresultaat verschijnen direct. Scan je in plaats daarvan een individuele kaart-QR (van een vóór v2.3 afgedrukt vel, of van een van de andere 3 varianten), dan werkt dat exact zoals voorheen.
+- 75-bal, 80-bal en 30-bal zijn in deze versie **niet aangepast** — die hebben nog steeds hun eigen QR per kaart, omdat elke kaart daar een onafhankelijke, niet uit een gedeelde code herleidbare seed heeft. Dit volgt later.
+
+### Gewijzigde bestanden
+- `bingo-common.js` — `encodeStripQR`/`decodeStripQR` toegevoegd (100% additief, niets bestaands gewijzigd): 1 seed-code regenereert alle 6 kaarten van een vel.
+- `cards.html` — nieuwe `renderEu90Pages`/`buildStripHeader` specifiek voor 90-bal; per-kaart QR verwijderd voor 90-bal; kaarten groter weergegeven; overige 3 varianten ongewijzigd via de bestaande `renderPages`.
+- `scan.html` — kaart-scanstap herkent nu ook een vel-QR (`STRIP:`) en toont dan een klikbaar 01-06-keuzescherm; individuele kaart-QR's en handmatige codes werken ongewijzigd.
+
+### Getest
+Volledige roundtrip geverifieerd: seed → QR-inhoud → gedecodeerde kaarten identiek aan origineel; printweergave zonder overflow op A4; camera-scan gesimuleerd met een echte gegenereerde vel-QR-afbeelding (via een fake-camera-feed) tot en met het klikken op kaart 03 en het tonen van het juiste resultaat; regressietest bevestigt dat individuele kaart-codes en de andere 3 varianten ongewijzigd blijven werken.
+
+---
+
 ## v2.2 — 2026-08-26
 ### Scannen verplaatst naar een losse tool + link i.p.v. schermfoto
 De ingebouwde camera-scanner op het trekkerscherm (`index.html`) werkte niet betrouwbaar: een QR-code die op een lichtgevend laptop-/telefoonscherm wordt getoond, is voor een andere telefooncamera notoir lastig te scannen (glans, moiré tussen de pixelrasters, scherpstel-problemen op een vlak fel scherm). Dit is getest en bevestigd: de scanlogica zelf werkt foutloos zodra hij een schone QR-afbeelding krijgt (geverifieerd met een gesimuleerde cameraveed) — het probleem zat 'm dus in het scannen van een scherm, niet in de code.
