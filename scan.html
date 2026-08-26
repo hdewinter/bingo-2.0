@@ -221,7 +221,25 @@
 
   rescanStateBtn.onclick = () => { startStateCamera(); };
 
-  startStateCamera();
+  /* Als er een ?state=<STATE:...>-link is gedeeld (i.p.v. een schermfoto scannen), direct laden. */
+  const params = new URLSearchParams(window.location.search);
+  const stateParam = params.get('state');
+  let loadedFromLink = false;
+  if(stateParam){
+    const nums = decodeStateQR(decodeURIComponent(stateParam));
+    if(nums){
+      drawnSet = new Set(nums);
+      loadedFromLink = true;
+      step1Scan.style.display = 'none';
+      step1Loaded.style.display = 'block';
+      step1Title.classList.add('done');
+      stateCount.textContent = drawnSet.size;
+      step2Panel.style.opacity = '1';
+      step2Panel.style.pointerEvents = 'auto';
+      startCardCamera();
+    }
+  }
+  if(!loadedFromLink){ startStateCamera(); }
 })();
 </script>
 </body>

@@ -2,6 +2,20 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.2 — 2026-08-26
+### Scannen verplaatst naar een losse tool + link i.p.v. schermfoto
+De ingebouwde camera-scanner op het trekkerscherm (`index.html`) werkte niet betrouwbaar: een QR-code die op een lichtgevend laptop-/telefoonscherm wordt getoond, is voor een andere telefooncamera notoir lastig te scannen (glans, moiré tussen de pixelrasters, scherpstel-problemen op een vlak fel scherm). Dit is getest en bevestigd: de scanlogica zelf werkt foutloos zodra hij een schone QR-afbeelding krijgt (geverifieerd met een gesimuleerde cameraveed) — het probleem zat 'm dus in het scannen van een scherm, niet in de code.
+
+- **Scannen is nu alleen nog te vinden op `scan.html`**, bedoeld voor het scannen van **afgedrukte** kaarten (papier scant veel betrouwbaarder dan een scherm). De trekker (`index.html`) heeft geen ingebouwde camera meer — dat scherm blijft dus altijd rustig zichtbaar voor iedereen, ook terwijl iemand aan het checken is.
+- De check-modal op de trekker heeft nu 2 tabs i.p.v. 3: **"Code intypen"** (ongewijzigd) en **"Trekking-QR / link"**. Die laatste tab heeft naast de QR nu ook een **"Link kopiëren"**-knop: die link (`scan.html?state=...`) kan gedeeld worden via WhatsApp/AirDrop/etc. en laadt de getrokken nummers direct op het andere toestel — geen schermfoto-scannerij meer nodig.
+- `scan.html` herkent nu automatisch een `?state=`-link bij het openen en slaat daarmee de trekking-QR-scanstap over. Het scannen van de bingokaart zelf (stap 2, met de camera) blijft ongewijzigd, want dat is scannen van papier en werkt goed.
+
+### Gewijzigde bestanden
+- `index.html` — camera-scanner ("Scannen"-tab) volledig verwijderd; "Link kopiëren"-knop en bijbehorende logica toegevoegd aan de Trekking-QR-tab.
+- `scan.html` — ondersteunt nu `?state=<...>` als URL-parameter om de trekkingsstatus direct te laden zonder camera.
+
+---
+
 ## v2.1 — 2026-08-26
 ### Fix: zwevende getallen op de afdruk
 Op de afgedrukte/geëxporteerde kaarten stonden de getallen los in de ruimte, zonder zichtbaar vak eromheen. Oorzaak: de vakjes hadden alleen een achtergrondkleur om zich te onderscheiden, en de meeste browsers printen achtergrondkleuren standaard niet mee (tenzij de gebruiker zelf "achtergrondafbeeldingen" aanvinkt in het printvenster).

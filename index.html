@@ -562,34 +562,29 @@
       <button class="check-close" id="checkClose">&times;</button>
     </div>
     <div class="check-tabs">
-      <div class="check-tab active" id="tabScan">Scannen</div>
-      <div class="check-tab" id="tabCode">Code intypen</div>
-      <div class="check-tab" id="tabState">Trekking-QR</div>
+      <div class="check-tab active" id="tabCode">Code intypen</div>
+      <div class="check-tab" id="tabState">Trekking-QR / link</div>
     </div>
 
-    <div id="scanPane">
-      <div class="scan-video-wrap">
-        <video id="scanVideo" playsinline muted></video>
-        <div class="scan-frame"></div>
-      </div>
-      <div class="scan-hint" id="scanHint">Richt de camera op de QR-code op de bingokaart.</div>
-      <div id="scanResult"></div>
-    </div>
-
-    <div id="codePane" style="display:none;">
+    <div id="codePane">
       <div class="field" style="margin-bottom:14px;">
         <label for="codeInput">Code onder de kaart</label>
         <input type="text" id="codeInput" placeholder="bv. K3F9P2-04" style="width:100%; text-transform:uppercase;">
       </div>
       <button class="btn gold" id="codeCheckBtn" style="width:100%;">Check</button>
       <div id="codeResult"></div>
+      <div class="scan-hint" style="margin-top:16px;">
+        Liever de QR-code op de kaart zelf scannen? Gebruik <a href="scan.html" target="_blank" style="color:var(--gold-soft);">de scanner</a> op je eigen telefoon — dan blijft dit trekkerscherm gewoon zichtbaar voor iedereen.
+      </div>
     </div>
 
     <div id="statePane" style="display:none;">
       <div id="qrStateBox">
         <canvas id="qrStateCanvas"></canvas>
         <div id="qrStateCount">0 nummers getrokken</div>
-        <div class="scan-hint">Scan deze QR-code met een los toestel om de trekking daar te laden.</div>
+        <div class="scan-hint">Scan deze QR met <a href="scan.html" target="_blank" style="color:var(--gold-soft);">de scanner</a> op een los toestel, of deel de link hieronder (handiger dan een schermfoto scannen).</div>
+        <button class="btn gold" id="copyStateLinkBtn" style="margin-top:10px;">Link kopiëren</button>
+        <div class="scan-hint" id="stateLinkHint" style="margin-top:8px;"></div>
       </div>
     </div>
   </div>
@@ -630,20 +625,17 @@
   const checkBtn = document.getElementById('checkBtn');
   const checkOverlay = document.getElementById('checkOverlay');
   const checkClose = document.getElementById('checkClose');
-  const tabScan = document.getElementById('tabScan');
   const tabCode = document.getElementById('tabCode');
   const tabState = document.getElementById('tabState');
-  const scanPane = document.getElementById('scanPane');
   const codePane = document.getElementById('codePane');
   const statePane = document.getElementById('statePane');
-  const scanVideo = document.getElementById('scanVideo');
-  const scanHint = document.getElementById('scanHint');
-  const scanResult = document.getElementById('scanResult');
   const codeInput = document.getElementById('codeInput');
   const codeCheckBtn = document.getElementById('codeCheckBtn');
   const codeResult = document.getElementById('codeResult');
   const qrStateCanvas = document.getElementById('qrStateCanvas');
   const qrStateCount = document.getElementById('qrStateCount');
+  const copyStateLinkBtn = document.getElementById('copyStateLinkBtn');
+  const stateLinkHint = document.getElementById('stateLinkHint');
 
   let midGameEdit = false;   // true wanneer we via 'Instellingen' vanuit een actief spel kwamen
   let pendingMax = null;
@@ -971,39 +963,26 @@
   buildGrid();
 
   /* ==================== Check-modal ==================== */
-  let scanStream = null;
-  let scanRAF = null;
-  let scanCanvas = document.createElement('canvas');
-  let scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
-  let qrStateInstance = null;
-  let lastScannedKey = null;
-
   function openCheckModal(){
     checkOverlay.classList.add('active');
-    switchTab('scan');
+    switchTab('code');
   }
   function closeCheckModal(){
     checkOverlay.classList.remove('active');
-    stopScanCamera();
   }
   checkBtn.onclick = openCheckModal;
   checkClose.onclick = closeCheckModal;
   checkOverlay.addEventListener('click', (e) => { if(e.target === checkOverlay) closeCheckModal(); });
 
   function switchTab(which){
-    tabScan.classList.toggle('active', which === 'scan');
     tabCode.classList.toggle('active', which === 'code');
     tabState.classList.toggle('active', which === 'state');
-    scanPane.style.display = which === 'scan' ? 'block' : 'none';
     codePane.style.display = which === 'code' ? 'block' : 'none';
     statePane.style.display = which === 'state' ? 'block' : 'none';
 
-    stopScanCamera();
-    if(which === 'scan'){ startScanCamera(); }
-    else if(which === 'state'){ renderStateQR(); }
+    if(which === 'state'){ renderStateQR(); }
     else if(which === 'code'){ codeResult.innerHTML = ''; codeInput.value = ''; }
   }
-  tabScan.onclick = () => switchTab('scan');
   tabCode.onclick = () => switchTab('code');
   tabState.onclick = () => switchTab('state');
 
@@ -1026,50 +1005,13 @@
     }, function(err){ if(err) console.error('QR error:', err); });
   }
 
-  function startScanCamera(){
-    scanResult.innerHTML = '';
-    scanHint.textContent = 'Richt de camera op de QR-code op de bingokaart.';
-    lastScannedKey = null;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        scanStream = stream;
-        scanVideo.srcObject = stream;
-        scanVideo.play();
-        scanRAF = requestAnimationFrame(scanTick);
-      })
-      .catch(err => {
-        scanHint.textContent = 'Kon de camera niet openen. Geef camera-toegang toe in je browserinstellingen.';
-      });
-  }
-  function stopScanCamera(){
-    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
-    if(scanStream){ scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  }
-  function scanTick(){
-    if(scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA){
-      scanCanvas.width = scanVideo.videoWidth;
-      scanCanvas.height = scanVideo.videoHeight;
-      scanCtx.drawImage(scanVideo, 0, 0, scanCanvas.width, scanCanvas.height);
-      const imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-      const code = jsQR(imgData.data, imgData.width, imgData.height);
-      if(code && code.data && code.data !== lastScannedKey){
-        const card = decodeCardQR(code.data);
-        if(card){
-          lastScannedKey = code.data;
-          showScanResult(card);
-        } else if(code.data.startsWith('STATE:')){
-          scanHint.textContent = 'Dit is een trekking-QR, geen kaart. Scan de QR op de bingokaart zelf.';
-        }
-      }
-    }
-    scanRAF = requestAnimationFrame(scanTick);
-  }
-
-  function showScanResult(card){
-    const res = checkCardAgainstDrawn(card, called);
-    scanResult.innerHTML = renderCheckResultHTML(res, card, called);
-    scanHint.textContent = 'Scan een andere kaart, of sluit het venster.';
-  }
+  copyStateLinkBtn.onclick = () => {
+    const text = encodeStateQR(Array.from(called));
+    const url = window.location.origin + window.location.pathname.replace('index.html', '') + 'scan.html?state=' + encodeURIComponent(text);
+    navigator.clipboard.writeText(url).then(() => {
+      stateLinkHint.textContent = "Link gekopieerd \u2014 stuur 'm door (WhatsApp, AirDrop, ...) i.p.v. het scherm te scannen.";
+    }).catch(() => { stateLinkHint.textContent = url; });
+  };
 })();
 </script>
 </body>
