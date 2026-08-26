@@ -2,6 +2,19 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.1 — 2026-08-26
+### Fix: zwevende getallen op de afdruk
+Op de afgedrukte/geëxporteerde kaarten stonden de getallen los in de ruimte, zonder zichtbaar vak eromheen. Oorzaak: de vakjes hadden alleen een achtergrondkleur om zich te onderscheiden, en de meeste browsers printen achtergrondkleuren standaard niet mee (tenzij de gebruiker zelf "achtergrondafbeeldingen" aanvinkt in het printvenster).
+
+- **Oplossing:** elk vakje heeft nu een echte, altijd zichtbare randlijn. De vakjes staan bovendien tegen elkaar aan (geen tussenruimte meer) zodat het geheel een doorlopend rooster vormt, zoals een echte bingokaart.
+- Kleur wordt daarnaast geforceerd om wél mee te printen waar de printer dat toelaat (`print-color-adjust: exact`) — het FREE-vakje (75-bal) en de kolomkleuren (80-bal) komen dus als bonus ook in kleur mee, maar de leesbaarheid hangt niet meer af van of kleur meeprint.
+- Geverifieerd met screenshots van de daadwerkelijke printweergave voor alle 4 varianten: strak, doorlopend rooster, geen zwevende getallen meer.
+
+### Gewijzigde bestanden
+- `cards.html` — CSS van `.bingo-grid`/`.bingo-cell`/`.bingo-header-row` omgezet naar een border-gebaseerd rooster (gap:0, randlijnen i.p.v. gap+achtergrondkleur); `print-color-adjust: exact` toegevoegd aan de printstijl.
+
+---
+
 ## v2.0 — 2026-08-25
 ### Nieuw: 4 officiële bingo-varianten
 De kaartgenerator vraagt niet langer om een handmatig getallenbereik, maar laat kiezen uit 4 officiële bingo-varianten (default: 90-bal Klassiek Europees). De trekker en checker bewegen automatisch mee met de gekozen variant.

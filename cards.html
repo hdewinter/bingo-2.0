@@ -55,24 +55,27 @@
     font-family:'Oswald', sans-serif; font-weight:700; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
     color:#8f1526; margin-bottom:6px; text-align:center;
   }
-  .bingo-header-row{ display:grid; gap:3px; margin-bottom:3px; }
+  .bingo-header-row{ display:grid; gap:0; margin-bottom:0; border-top:1.5px solid #0a1730; border-left:1.5px solid #0a1730; }
   .bingo-header-cell{
     text-align:center; font-family:'Anton',sans-serif; font-size: clamp(11px,1.6vw,15px);
-    color:#8f1526; letter-spacing:0.05em;
+    color:#8f1526; letter-spacing:0.05em; padding:3px 0;
+    border-right:1.5px solid #0a1730; border-bottom:1.5px solid #0a1730;
   }
   .bingo-grid{
-    display:grid; gap:3px;
+    display:grid; gap:0;
+    border-top:1.5px solid #0a1730; border-left:1.5px solid #0a1730;
     width:100%; box-sizing:border-box;
   }
   .bingo-cell{
     aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
-    background:#f4efe3; border-radius:4px;
+    border-right:1.5px solid #0a1730; border-bottom:1.5px solid #0a1730;
+    background:#fff;
     font-family:'Oswald', sans-serif; font-weight:700; font-size: clamp(9px, 1.4vw, 13px);
     color:#0a1730;
     min-width:0; min-height:0; width:100%; box-sizing:border-box;
     overflow:hidden;
   }
-  .bingo-cell.empty{ background: transparent; }
+  .bingo-cell.empty{ background:#fff; }
   .bingo-cell.free{ background:#e4d9b8; color:#8f1526; font-size:8px; letter-spacing:0.04em; }
   .bingo-cell.qr{ background:#0a1730; padding:1px; display:flex; align-items:center; justify-content:center; }
   .bingo-cell.qr canvas{ width:100% !important; height:100% !important; max-width:100%; max-height:100%; display:block; }
@@ -103,6 +106,11 @@
     @page{ size: A4; margin: 8mm; }
     body{ background:#fff !important; padding:0 !important; }
     .no-print{ display:none !important; }
+    .bingo-card, .bingo-card *{
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
     .print-page{
       display:grid;
       grid-template-columns: 1fr 1fr;
