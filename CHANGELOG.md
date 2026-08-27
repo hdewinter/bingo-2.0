@@ -2,6 +2,23 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.4 — 2026-08-26
+### Fix: verwarring tussen 0 (nul) en O (letter) in codes
+Bij het handmatig intypen van een kaartcode (bv. `1C69OWA-01`) is de letter O makkelijk te verwarren met het cijfer 0 — vooral in bepaalde lettertypes bijna niet te onderscheiden. Dit leverde een "verkeerde" kaart op zonder duidelijke foutmelding.
+
+- **Nieuwe codes gebruiken vanaf nu een alfabet zonder O, I, L en U** (dezelfde aanpak als Crockford Base32, een bekende standaardoplossing voor precies dit probleem). Deze letters lijken te veel op 0, 1/l en V, en komen dus simpelweg niet meer voor in nieuw gegenereerde codes — of het nu een kaartcode, een vel-code of de tekst in een QR-code is.
+- **Al afgedrukte kaarten (van vóór deze versie) blijven gewoon werken.** Het systeem herkent een oude code automatisch aan de aanwezigheid van O, I, L of U en decodeert die dan op de oude manier. Geen enkele eerder afgedrukte kaart wordt ongeldig.
+- Kleine kanttekening: in het (zeldzame) geval dat een oude code toevallig geen enkele O/I/L/U bevat, wordt hij voortaan als "nieuw formaat" geïnterpreteerd, wat een andere kaart zou opleveren. Gezien het beperkte aantal tot nu toe afgedrukte batches is dit risico verwaarloosbaar; bij twijfel over een specifieke oude batch: opnieuw afdrukken met deze versie geeft gegarandeerd de nieuwe, ondubbelzinnige codes.
+
+### Gewijzigde bestanden
+- `bingo-common.js` — `SAFE_ALPHABET`/`seedToSafeCode`/`safeCodeToSeed`/`decodeSeedPart` toegevoegd; `encodeTextCode`, `encodeStripQR` gebruiken nu het veilige alfabet; `decodeTextCode`/`decodeStripQR` herkennen en ondersteunen beide formaten.
+- `cards.html` — de losse vel-code bovenaan een 90-bal A4-vel toont nu ook het veilige alfabet.
+
+### Getest
+2000 willekeurige seeds gegenereerd en gecontroleerd op afwezigheid van O/I/L/U; encode/decode-roundtrip geverifieerd voor alle 4 varianten; bevestigd dat een oude, echte legacy-code met een O erin (uit de screenshots die aanleiding gaven tot deze fix) nog steeds correct decodeert; browsertest bevestigt dat nieuw gegenereerde kaartcodes, vel-codes en QR-inhoud geen van de 4 verboden letters bevatten.
+
+---
+
 ## v2.3 — 2026-08-26
 ### 90-bal: 1 grote QR per A4-vel i.p.v. 6 kleintjes (betrouwbaarder scannen + groter, opvallender kaarten)
 De losse QR-codes ingebed in elk van de 6 kaartjes op een vel waren op papier te klein om betrouwbaar te scannen (weinig witruimte eromheen, laag contrast bij kleinere printers). Alleen voor **90-bal** (waar alle 6 kaarten op een vel toch al uit dezelfde "seed" komen) is dit nu anders opgelost:

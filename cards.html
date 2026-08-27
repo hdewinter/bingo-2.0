@@ -356,7 +356,7 @@
 
     const label = document.createElement('div');
     label.className = 'strip-qr-label';
-    const seedCode = strip.seed.toString(36).toUpperCase();
+    const seedCode = seedToSafeCode(strip.seed);
     label.innerHTML = 'Scan voor kaart 01\u201306<br><strong>' + seedCode + '</strong>';
     header.appendChild(label);
 

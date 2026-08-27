@@ -238,9 +238,46 @@ function paginateCards(cards, cardsPerPage){
   return pages;
 }
 
-/* ---------- Korte intypbare code ---------- */
+/* ---------- Korte intypbare code ----------
+   Gebruikt een alfabet ZONDER O, I, L, U om verwarring met 0/1/V te voorkomen
+   (dezelfde aanpak als Crockford Base32). Oude, al afgedrukte codes (die wel
+   O/I/L/U kunnen bevatten, uit het vorige, gewone base36-alfabet) blijven
+   gewoon werken: decodeSeedPart herkent ze automatisch aan die letters. */
+const SAFE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // 32 tekens, geen O/I/L/U
+function seedToSafeCode(seed){
+  let n = seed >>> 0;
+  if(n === 0) return '0';
+  let out = '';
+  while(n > 0){
+    out = SAFE_ALPHABET[n % 32] + out;
+    n = Math.floor(n / 32);
+  }
+  return out;
+}
+function safeCodeToSeed(str){
+  let n = 0;
+  for(let i=0;i<str.length;i++){
+    const idx = SAFE_ALPHABET.indexOf(str[i]);
+    if(idx === -1) return null;
+    n = n * 32 + idx;
+  }
+  return n >>> 0;
+}
+// Herkent of een getypte seed-code oud (base36, kan O/I/L/U bevatten) of
+// nieuw (veilig alfabet) is, en decodeert dienovereenkomstig.
+function decodeSeedPart(str){
+  if(/[OILU]/.test(str)){
+    const seed = parseInt(str, 36);
+    return isNaN(seed) ? null : (seed >>> 0);
+  }
+  const safe = safeCodeToSeed(str);
+  if(safe !== null) return safe;
+  const legacy = parseInt(str, 36);
+  return isNaN(legacy) ? null : (legacy >>> 0);
+}
+
 function encodeTextCode(seed, cardIndex, variantId){
-  const seedStr = seed.toString(36).toUpperCase();
+  const seedStr = seedToSafeCode(seed);
   const idxStr = String(cardIndex + 1).padStart(2, '0');
   if(!variantId || variantId === 'eu90') return seedStr + '-' + idxStr;
   return variantId.toUpperCase() + '-' + seedStr + '-' + idxStr;
@@ -250,10 +287,10 @@ function decodeTextCode(code){
   const clean = code.trim().toUpperCase();
   const parts = clean.split('-');
   if(parts.length === 2){
-    const seed = parseInt(parts[0], 36);
+    const seed = decodeSeedPart(parts[0]);
     const idx = parseInt(parts[1], 10) - 1;
-    if(isNaN(seed) || isNaN(idx) || idx < 0 || idx >= TICKETS_PER_STRIP) return null;
-    const grids = generateStripFromSeed(seed >>> 0);
+    if(seed === null || isNaN(idx) || idx < 0 || idx >= TICKETS_PER_STRIP) return null;
+    const grids = generateStripFromSeed(seed);
     if(!grids || !grids[idx]) return null;
     return { variantId: 'eu90', grid: grids[idx] };
   }
@@ -261,10 +298,10 @@ function decodeTextCode(code){
     const variantId = parts[0].toLowerCase();
     const variant = BINGO_VARIANTS[variantId];
     if(!variant) return null;
-    const seed = parseInt(parts[1], 36);
+    const seed = decodeSeedPart(parts[1]);
     const idx = parseInt(parts[2], 10) - 1;
-    if(isNaN(seed) || idx < 0 || isNaN(idx)) return null;
-    const rng = mulberry32(seed >>> 0);
+    if(seed === null || idx < 0 || isNaN(idx)) return null;
+    const rng = mulberry32(seed);
     const grid = generateRandomCard(variant, rng);
     return { variantId, grid };
   }
@@ -312,13 +349,13 @@ function decodeCardQR(text){
    Bevat enkel de gedeelde seed van de strip; alle 6 kaarten worden
    daaruit opnieuw berekend (identiek aan hoe ze gegenereerd zijn). */
 function encodeStripQR(seed){
-  return 'STRIP:' + (seed >>> 0).toString(36).toUpperCase();
+  return 'STRIP:' + seedToSafeCode(seed);
 }
 function decodeStripQR(text){
   if(!text || !text.startsWith('STRIP:')) return null;
-  const seed = parseInt(text.slice(6), 36);
-  if(isNaN(seed)) return null;
-  const grids = generateStripFromSeed(seed >>> 0);
+  const seed = decodeSeedPart(text.slice(6));
+  if(seed === null) return null;
+  const grids = generateStripFromSeed(seed);
   if(!grids) return null;
   const tickets = grids.map((grid, i) => buildTicket(grid, seed, i));
   return { seed, tickets };
@@ -438,6 +475,7 @@ if(typeof module !== 'undefined'){
     generateStrips, generateStripFromSeed, buildTicket,
     generateRandomCard, generateCardsForVariant, paginateCards,
     encodeTextCode, decodeTextCode, encodeCardQR, decodeCardQR,
+    seedToSafeCode, safeCodeToSeed,
     encodeStripQR, decodeStripQR,
     encodeStateQR, decodeStateQR, checkCardAgainstDrawn, renderCheckResultHTML,
     randomSeed, mulberry32, gridFromRows, shuffleWith
