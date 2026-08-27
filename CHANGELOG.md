@@ -2,6 +2,25 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.5 — 2026-08-27
+### Fix: scannen deed niets + scan.html vereenvoudigd naar 1 camera
+Bij het scannen van de grote vel-QR (uit v2.3) gebeurde er niets. Root cause: `scan.html` had 2 gescheiden scanstappen — stap 1 ("Scan de trekking-QR") herkende alléén het oudste QR-formaat (`CARD:`) om te zeggen "dit is een kaart, geen trekking". De sindsdien geïntroduceerde formaten `CARD2:` (v2.0) en `STRIP:` (v2.3) werden door stap 1 helemaal niet herkend — dus bleef het gewoon stil, zonder foutmelding.
+
+Los van die bug bleek de gedwongen volgorde zelf ook onhandig: je moest eerst per se een trekking-QR scannen voordat de kaart-camera (stap 2) uberhaupt werd vrijgegeven.
+
+- **`scan.html` heeft nu nog maar 1 camera.** Die herkent zelf, in willekeurige volgorde, of je een trekking-QR, een vel-QR (met kaartkeuze 01-06) of een losse kaart-QR voorhoudt — geen gescheiden stappen meer.
+- Een kleine statusbalk ("Trekking: X nummers geladen") toont of en hoeveel nummers er geladen zijn, met een knop om opnieuw een trekking-QR te scannen wanneer dat nodig is. Een kaart scannen kan altijd, ook zonder dat er al een trekking geladen is (dan zie je de kaart zonder gemarkeerde nummers).
+- Alle bestaande QR- en codeformaten (inclusief de oudste `CARD:`-kaarten) blijven herkend.
+- Instructietekst op de pagina bijgewerkt zodat die overeenkomt met hoe de app nu werkt.
+
+### Gewijzigde bestanden
+- `scan.html` — volledig herschreven van een 2-staps-flow naar 1 camera met automatische QR-typedetectie (`decodeStateQR` / `decodeStripQR` / `decodeCardQR`, in die volgorde).
+
+### Getest
+Alle 4 QR-typen (trekking, vel, nieuwe kaart, oude legacy-kaart) los getest met een gesimuleerde cameraveed van een echt gegenereerde QR-afbeelding; gecombineerde flow getest (trekking laden via link, dan vel scannen, dan kaartnummer kiezen) — checkresultaat klopte exact met de geladen nummers.
+
+---
+
 ## v2.4 — 2026-08-26
 ### Fix: verwarring tussen 0 (nul) en O (letter) in codes
 Bij het handmatig intypen van een kaartcode (bv. `1C69OWA-01`) is de letter O makkelijk te verwarren met het cijfer 0 — vooral in bepaalde lettertypes bijna niet te onderscheiden. Dit leverde een "verkeerde" kaart op zonder duidelijke foutmelding.
