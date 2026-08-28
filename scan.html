@@ -36,14 +36,26 @@
   .scan-video-wrap{
     position:relative; width:100%; aspect-ratio:1/1; border-radius:16px; overflow:hidden;
     background:#000; border:2px solid var(--gold); margin-bottom:12px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .scan-video-wrap video{ width:100%; height:100%; object-fit:cover; }
-  .scan-frame{ position:absolute; inset:12%; border:2px dashed var(--gold-soft); border-radius:12px; pointer-events:none; }
+  .scan-frame{
+    position:absolute; inset:12%; border:2px dashed var(--gold-soft); border-radius:12px; pointer-events:none;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .scan-video-wrap.detect-pulse{ border-color: var(--cream); box-shadow: 0 0 0 4px rgba(255,255,255,0.12) inset; }
+  .scan-video-wrap.detect-pulse .scan-frame{ border-color: var(--cream); transform: scale(0.97); }
+  .scan-video-wrap.success-pulse{ border-color: var(--green); box-shadow: 0 0 0 4px rgba(47,174,102,0.25) inset; }
+  .scan-video-wrap.success-pulse .scan-frame{ border-color: var(--green); transform: scale(0.97); }
+  .scan-video-wrap.blocked-pulse{ border-color: #d9534f; box-shadow: 0 0 0 4px rgba(217,83,79,0.22) inset; }
+  .scan-video-wrap.blocked-pulse .scan-frame{ border-color: #d9534f; transform: scale(0.97); }
   .scan-hint{ text-align:center; font-size:13px; color:var(--muted); }
+  .scan-hint.step-locked{ color: var(--gold-soft); font-weight:600; }
   .scan-flash{
     text-align:center; font-size:13px; color: var(--green); font-weight:600;
     margin-top:8px; min-height:18px;
   }
+  .scan-flash.blocked{ color: #d9534f; }
 
   .result-box{ border-radius:14px; padding:18px; text-align:center; margin-top:14px; border:1px solid var(--line); background: var(--navy-panel); }
   .result-box.win{ background: linear-gradient(180deg, rgba(47,174,102,0.25), rgba(47,174,102,0.08)); border-color: var(--green); }
@@ -75,7 +87,7 @@
       <button id="rescanStateBtn" type="button">Trekking-QR scannen</button>
     </div>
 
-    <div class="scan-video-wrap">
+    <div class="scan-video-wrap" id="scanVideoWrap">
       <video id="scanVideo" playsinline muted></video>
       <div class="scan-frame"></div>
     </div>
@@ -108,6 +120,7 @@
   const rescanStateBtn = document.getElementById('rescanStateBtn');
 
   const scanVideo = document.getElementById('scanVideo');
+  const scanVideoWrap = document.getElementById('scanVideoWrap');
   const scanHint = document.getElementById('scanHint');
   const scanFlash = document.getElementById('scanFlash');
   const cardResult = document.getElementById('cardResult');
@@ -135,10 +148,42 @@
     }
   }
 
-  function flash(msg){
+  function flash(msg, isBlocked){
     scanFlash.textContent = msg;
+    scanFlash.classList.toggle('blocked', !!isBlocked);
     if(flashTimer) clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => { scanFlash.textContent = ''; }, 3000);
+    flashTimer = setTimeout(() => { scanFlash.textContent = ''; scanFlash.classList.remove('blocked'); }, 3000);
+  }
+
+  function vibrate(pattern){
+    if('vibrate' in navigator){
+      try{ navigator.vibrate(pattern); }catch(e){ /* stil negeren */ }
+    }
+  }
+
+  let pulseTimer = null;
+  function pulse(kind){
+    // kind: 'detect' | 'success' | 'blocked'
+    scanVideoWrap.classList.remove('detect-pulse', 'success-pulse', 'blocked-pulse');
+    // force reflow zodat de animatie opnieuw start bij snel achter elkaar scannen
+    void scanVideoWrap.offsetWidth;
+    scanVideoWrap.classList.add(kind + '-pulse');
+    if(pulseTimer) clearTimeout(pulseTimer);
+    pulseTimer = setTimeout(() => { scanVideoWrap.classList.remove(kind + '-pulse'); }, 350);
+
+    if(kind === 'detect') vibrate(30);
+    else if(kind === 'success') vibrate([25, 40, 25]);
+    else if(kind === 'blocked') vibrate([25, 60, 25, 60, 25]);
+  }
+
+  function updateStepHint(){
+    if(drawnSet.size === 0){
+      scanHint.textContent = 'Stap 1 van 2 — richt de camera op de trekking-QR. Kaart of vel scannen kan pas daarna.';
+      scanHint.classList.add('step-locked');
+    } else {
+      scanHint.textContent = 'Stap 2 van 2 — richt de camera nu op de vel-QR of de QR op een losse kaart.';
+      scanHint.classList.remove('step-locked');
+    }
   }
 
   /* Eén camera, herkent zelf elk QR-type: trekking (STATE), vel (STRIP) of kaart (CARD2/CARD legacy). */
@@ -173,29 +218,47 @@
 
   function handleScannedText(data){
     const nums = decodeStateQR(data);
+    const strip = !nums ? decodeStripQR(data) : null;
+    const card = (!nums && !strip) ? decodeCardQR(data) : null;
+
+    if(!nums && !strip && !card){
+      // Onherkende QR-inhoud (bv. van een andere app): stil negeren, geen foutmelding nodig
+      // want dit kan ook gewoon een QR zijn die toevallig in beeld komt terwijl je aan het richten bent.
+      return;
+    }
+
+    // Er is in elk geval een geldige bingo-QR gevonden — altijd meteen merkbare feedback geven.
+    lastKey = data;
+    pulse('detect');
+
     if(nums){
-      lastKey = data;
       drawnSet = new Set(nums);
       updateTrekkingStatus();
+      updateStepHint();
+      pulse('success');
       flash('Trekking geladen: ' + drawnSet.size + ' nummers.');
       return;
     }
-    const strip = decodeStripQR(data);
+
+    if(drawnSet.size === 0){
+      // Kaart of vel gescand vóór de trekking-QR: nog niet toestaan, duidelijk aangeven wat wél moet.
+      pulse('blocked');
+      flash('Scan eerst de trekking-QR voordat je een kaart checkt.', true);
+      return;
+    }
+
     if(strip){
-      lastKey = data;
       cardResult.innerHTML = '';
+      pulse('success');
       showTicketPicker(strip);
       return;
     }
-    const card = decodeCardQR(data);
     if(card){
-      lastKey = data;
       ticketPickerPane.style.display = 'none';
+      pulse('success');
       showCardResult(card);
       return;
     }
-    // Onherkende QR-inhoud (bv. van een andere app): stil negeren, geen foutmelding nodig
-    // want dit kan ook gewoon een QR zijn die toevallig in beeld komt terwijl je aan het richten bent.
   }
 
   function showTicketPicker(strip){
@@ -234,10 +297,14 @@
   };
 
   rescanStateBtn.onclick = () => {
+    drawnSet = new Set();
+    updateTrekkingStatus();
+    updateStepHint();
     flash('Richt de camera nu op de trekking-QR.');
   };
 
   updateTrekkingStatus();
+  updateStepHint();
 
   /* Als er een ?state=<STATE:...>-link is gedeeld (i.p.v. een schermfoto scannen), direct laden. */
   const params = new URLSearchParams(window.location.search);
@@ -247,6 +314,7 @@
     if(nums){
       drawnSet = new Set(nums);
       updateTrekkingStatus();
+      updateStepHint();
       flash('Trekking geladen via link: ' + drawnSet.size + ' nummers.');
     }
   }
