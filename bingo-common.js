@@ -55,7 +55,7 @@ const BINGO_VARIANTS = {
     totalBalls: 30, rows: 3, cols: 3,
     columns: [{min:1,max:10},{min:11,max:20},{min:21,max:30}],
     numbersPerCard: 9, hasFreeSpace: false,
-    cardsPerPage: 9, mode: 'random', winLines: 'none',
+    cardsPerPage: 6, mode: 'random', winLines: 'none',
     description: '3x3-kaart, geen lege vakjes. Alleen te winnen met een volle kaart — supersnel spel.'
   }
 };
@@ -240,9 +240,11 @@ function paginateCards(cards, cardsPerPage){
 
 /* ---------- Korte intypbare code ----------
    Gebruikt een alfabet ZONDER O, I, L, U om verwarring met 0/1/V te voorkomen
-   (dezelfde aanpak als Crockford Base32). Oude, al afgedrukte codes (die wel
-   O/I/L/U kunnen bevatten, uit het vorige, gewone base36-alfabet) blijven
-   gewoon werken: decodeSeedPart herkent ze automatisch aan die letters. */
+   (dezelfde aanpak als Crockford Base32). Elke nieuwe code krijgt een extra
+   CONTROLECIJFER aan het eind. Zo kan decodeSeedPart met (vrijwel) zekerheid
+   zien of een getypte code nieuw of oud (legacy base36) is, in plaats van te
+   gokken op basis van "bevat hij toevallig geen O/I/L/U" — dat bleek fout te
+   gaan bij oude codes die toevallig geen van die letters bevatten. */
 const SAFE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // 32 tekens, geen O/I/L/U
 function seedToSafeCode(seed){
   let n = seed >>> 0;
@@ -263,21 +265,32 @@ function safeCodeToSeed(str){
   }
   return n >>> 0;
 }
-// Herkent of een getypte seed-code oud (base36, kan O/I/L/U bevatten) of
-// nieuw (veilig alfabet) is, en decodeert dienovereenkomstig.
-function decodeSeedPart(str){
-  if(/[OILU]/.test(str)){
-    const seed = parseInt(str, 36);
-    return isNaN(seed) ? null : (seed >>> 0);
+function checksumChar(seedCodeBody){
+  let sum = 0;
+  for(let i=0;i<seedCodeBody.length;i++){
+    sum = (sum * 31 + SAFE_ALPHABET.indexOf(seedCodeBody[i])) % 32;
   }
-  const safe = safeCodeToSeed(str);
-  if(safe !== null) return safe;
+  return SAFE_ALPHABET[sum];
+}
+// Herkent of een getypte seed-code oud (base36, kan O/I/L/U bevatten, geen
+// controlecijfer) of nieuw (veilig alfabet + controlecijfer) is, aan de hand
+// van het controlecijfer -- niet aan de hand van welke letters erin zitten.
+function decodeSeedPart(str){
+  if(str.length >= 2){
+    const body = str.slice(0, -1);
+    const check = str.slice(-1);
+    const bodySeed = safeCodeToSeed(body);
+    if(bodySeed !== null && checksumChar(body) === check){
+      return bodySeed;
+    }
+  }
   const legacy = parseInt(str, 36);
   return isNaN(legacy) ? null : (legacy >>> 0);
 }
 
 function encodeTextCode(seed, cardIndex, variantId){
-  const seedStr = seedToSafeCode(seed);
+  const body = seedToSafeCode(seed);
+  const seedStr = body + checksumChar(body);
   const idxStr = String(cardIndex + 1).padStart(2, '0');
   if(!variantId || variantId === 'eu90') return seedStr + '-' + idxStr;
   return variantId.toUpperCase() + '-' + seedStr + '-' + idxStr;
@@ -349,7 +362,8 @@ function decodeCardQR(text){
    Bevat enkel de gedeelde seed van de strip; alle 6 kaarten worden
    daaruit opnieuw berekend (identiek aan hoe ze gegenereerd zijn). */
 function encodeStripQR(seed){
-  return 'STRIP:' + seedToSafeCode(seed);
+  const body = seedToSafeCode(seed);
+  return 'STRIP:' + body + checksumChar(body);
 }
 function decodeStripQR(text){
   if(!text || !text.startsWith('STRIP:')) return null;
@@ -475,7 +489,7 @@ if(typeof module !== 'undefined'){
     generateStrips, generateStripFromSeed, buildTicket,
     generateRandomCard, generateCardsForVariant, paginateCards,
     encodeTextCode, decodeTextCode, encodeCardQR, decodeCardQR,
-    seedToSafeCode, safeCodeToSeed,
+    seedToSafeCode, safeCodeToSeed, checksumChar,
     encodeStripQR, decodeStripQR,
     encodeStateQR, decodeStateQR, checkCardAgainstDrawn, renderCheckResultHTML,
     randomSeed, mulberry32, gridFromRows, shuffleWith

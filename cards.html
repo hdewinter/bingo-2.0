@@ -254,7 +254,8 @@
     countLabelField.textContent = currentVariant.id === 'eu90'
       ? 'Aantal A4-vellen (elk = 6 kaarten)'
       : 'Aantal kaarten (' + currentVariant.cardsPerPage + ' per A4-vel)';
-    countInput.value = currentVariant.id === 'eu90' ? 4 : currentVariant.cardsPerPage;
+    const defaultCounts = { eu90: 4, speed30: 12 };
+    countInput.value = defaultCounts[currentVariant.id] ?? currentVariant.cardsPerPage;
     stripsArea.innerHTML = ''; printArea.innerHTML = ''; actionsRow.style.display = 'none'; genError.textContent = '';
     try{ localStorage.setItem('bingo2-variant', id); }catch(e){}
   }
@@ -356,7 +357,8 @@
 
     const label = document.createElement('div');
     label.className = 'strip-qr-label';
-    const seedCode = seedToSafeCode(strip.seed);
+    const seedBody = seedToSafeCode(strip.seed);
+    const seedCode = seedBody + checksumChar(seedBody);
     label.innerHTML = 'Scan voor kaart 01\u201306<br><strong>' + seedCode + '</strong>';
     header.appendChild(label);
 

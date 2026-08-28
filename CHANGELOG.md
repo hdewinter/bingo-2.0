@@ -2,6 +2,26 @@
 
 Alle noemenswaardige aanpassingen aan dit project staan hieronder, meest recente versie bovenaan.
 
+## v2.6 — 2026-08-27
+### Kritieke fix: oude codes soms stil verkeerd geïnterpreteerd (verkeerde kaart, geen foutmelding)
+De O/I/L/U-fix uit v2.4 had een randgeval dat erger bleek dan verwacht: een oude, vóór v2.4 afgedrukte code die **toevallig** geen enkele O/I/L/U bevat (bijv. `D34FPJ-01`) werd ten onrechte als "nieuw formaat" gelezen. Gevolg: geen foutmelding, maar een volledig **andere, verkeerde kaart** werd getoond — potentieel heel verwarrend tijdens een echt spel.
+
+- **Oplossing:** nieuwe codes krijgen nu een extra **controlecijfer** aan het eind. Daarmee kan de app met (vrijwel) zekerheid vaststellen of een getypte code nieuw of oud is — niet meer op basis van een gok ("bevat hij toevallig geen verboden letter"), maar op basis van een rekencheck die alleen bij een nieuwe, correct gegenereerde code klopt.
+- Getest met het exacte voorbeeld uit de bugmelding (`D34FPJ-01`): decodeert nu weer correct naar de nummers die daadwerkelijk op de kaart staan.
+- Bredere test: 3000 nieuw gegenereerde kaarten roundtrip-getest (100% correct), en 5000 willekeurige oude (legacy) codes gecontroleerd op foutieve herinterpretatie (kleine restkans blijft onvermijdelijk bij een 1-teken-controlecijfer, maar dit is een drastische verbetering t.o.v. de vorige situatie waarbij *elke* letterloze oude code fout ging).
+
+### 30-bal Speed: printoverlap opgelost + standaard 12 kaarten
+Bij het printen van 30-bal-kaarten stonden er 9 kaartjes op 1 pagina (2 kolommen x 5 rijen) — te veel om op de hoogte van een A4 te passen, waardoor kaartjes van de volgende pagina over elkaar heen kwamen te staan.
+
+- Aantal kaarten per vel voor 30-bal verlaagd van 9 naar **6** (2 kolommen x 3 rijen, dezelfde opzet als 80-bal, die al probleemloos werkte). Geverifieerd: geen overflow meer.
+- Standaard aantal kaarten bij het openen van de 30-bal variant staat nu op **12** (i.p.v. 6) — dat vult precies 2 volle A4-vellen.
+
+### Gewijzigde bestanden
+- `bingo-common.js` — `checksumChar` toegevoegd; `encodeTextCode`/`encodeStripQR`/`decodeSeedPart` gebruiken nu een controlecijfer i.p.v. te gokken op basis van O/I/L/U-aanwezigheid; `speed30.cardsPerPage` van 9 naar 6.
+- `cards.html` — vel-code-weergave toont het controlecijfer mee; standaard aantal kaarten per variant is nu instelbaar per variant (30-bal: 12).
+
+---
+
 ## v2.5 — 2026-08-27
 ### Fix: scannen deed niets + scan.html vereenvoudigd naar 1 camera
 Bij het scannen van de grote vel-QR (uit v2.3) gebeurde er niets. Root cause: `scan.html` had 2 gescheiden scanstappen — stap 1 ("Scan de trekking-QR") herkende alléén het oudste QR-formaat (`CARD:`) om te zeggen "dit is een kaart, geen trekking". De sindsdien geïntroduceerde formaten `CARD2:` (v2.0) en `STRIP:` (v2.3) werden door stap 1 helemaal niet herkend — dus bleef het gewoon stil, zonder foutmelding.
