@@ -396,6 +396,29 @@
   .variant-opt.active{ border-color: var(--gold); background: linear-gradient(180deg, rgba(212,175,55,0.18), rgba(212,175,55,0.05)); }
   .variant-opt.active .v-title{ color: var(--gold-soft); }
 
+  #speechOverlay{
+    display:none; position:fixed; inset:0; z-index:610;
+    background: rgba(6,13,26,0.82);
+    align-items:center; justify-content:center; padding:16px;
+  }
+  #speechOverlay.active{ display:flex; }
+
+  .lang-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .lang-btn{
+    flex:1 1 28%; min-width:88px; text-align:center; padding:9px 8px; border-radius:10px;
+    border:1px solid var(--line); background:var(--navy-deep); color:var(--muted);
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:12px; cursor:pointer;
+  }
+  .lang-btn.active{ background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color:var(--navy-deep); border-color:transparent; }
+  .voice-select{
+    width:100%; padding:10px; border-radius:10px; border:1px solid var(--line);
+    background:var(--navy-deep); color:var(--cream); font-size:13.5px;
+  }
+  .speech-config-link{
+    display:inline-block; margin-top:8px; font-size:12.5px; color:var(--gold-soft);
+    text-decoration:none; border-bottom:1px dashed var(--gold-soft);
+  }
+
   #qrStateBox{ display:flex; flex-direction:column; align-items:center; gap:12px; }
   #qrStateCanvas{ background:#fff; padding:14px; border-radius:14px; }
   #qrStateCount{ font-family:'Oswald', sans-serif; color:var(--gold-soft); font-size:14px; letter-spacing:0.05em; text-transform:uppercase; }
@@ -488,10 +511,12 @@
       </div>
 
       <div class="field" style="margin-bottom:6px;">
-        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="soundToggle" checked style="width:18px;height:18px; accent-color:#d4af37;">
-          <span style="text-transform:none; letter-spacing:0; color:var(--cream); font-family:'Inter',sans-serif; font-size:14.5px;">Geluid bij elk getrokken nummer</span>
-        </label>
+        <label>Aankondiging bij elk getrokken nummer</label>
+        <div class="check-tabs" style="margin-bottom:0;">
+          <div class="check-tab active" id="modeBeepTab">🔔 Piepje</div>
+          <div class="check-tab" id="modeSpeechTab">🗣️ Spraak</div>
+        </div>
+        <a href="#" class="speech-config-link" id="speechConfigLink" style="display:none;">Spraak instellen (taal, stijl, stem) →</a>
       </div>
 
       <button class="start-btn" id="startBtn">Start bingo</button>
@@ -590,6 +615,36 @@
   </div>
 </div>
 
+<div id="speechOverlay">
+  <div class="check-card">
+    <div class="check-header">
+      <h3>Spraak instellen</h3>
+      <button class="check-close" id="speechClose">&times;</button>
+    </div>
+
+    <div class="field">
+      <label>Taal / accent</label>
+      <div class="lang-grid" id="speechLangGrid"></div>
+    </div>
+
+    <div class="field">
+      <label>Uitspraakstijl</label>
+      <div class="check-tabs">
+        <div class="check-tab" id="speechStyleTogether">Aan elkaar<br><span style="font-size:10px; text-transform:none; letter-spacing:0;">"vierenzeventig"</span></div>
+        <div class="check-tab" id="speechStyleDigits">Los per cijfer<br><span style="font-size:10px; text-transform:none; letter-spacing:0;">"zeven — vier"</span></div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:12px;">
+      <label for="speechVoiceSelect">Stem</label>
+      <select id="speechVoiceSelect" class="voice-select"></select>
+      <div class="hint" id="speechVoiceHint" style="margin-top:6px;"></div>
+    </div>
+
+    <button class="btn gold" id="speechPreviewBtn" style="width:100%;">🔊 Test met een voorbeeldgetal</button>
+  </div>
+</div>
+
 <script>
 (function(){
   const variantSelect = document.getElementById('variantSelect');
@@ -599,7 +654,17 @@
   const intPlus = document.getElementById('intPlus');
   const startBtn = document.getElementById('startBtn');
   const settingsError = document.getElementById('settingsError');
-  const soundToggle = document.getElementById('soundToggle');
+  const modeBeepTab = document.getElementById('modeBeepTab');
+  const modeSpeechTab = document.getElementById('modeSpeechTab');
+  const speechConfigLink = document.getElementById('speechConfigLink');
+  const speechOverlay = document.getElementById('speechOverlay');
+  const speechClose = document.getElementById('speechClose');
+  const speechLangGrid = document.getElementById('speechLangGrid');
+  const speechStyleTogether = document.getElementById('speechStyleTogether');
+  const speechStyleDigits = document.getElementById('speechStyleDigits');
+  const speechVoiceSelect = document.getElementById('speechVoiceSelect');
+  const speechVoiceHint = document.getElementById('speechVoiceHint');
+  const speechPreviewBtn = document.getElementById('speechPreviewBtn');
 
   const settingsScreen = document.getElementById('settingsScreen');
   const gameScreen = document.getElementById('gameScreen');
@@ -729,7 +794,7 @@
   intPlus.onclick = () => clampStep(intInput, 2, 120, 1);
 
   function playPing(){
-    if(!soundToggle.checked) return;
+    if(soundMode !== 'beep') return;
     try{
       if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const t0 = audioCtx.currentTime;
@@ -745,6 +810,169 @@
       osc.start(t0);
       osc.stop(t0 + 0.55);
     }catch(e){}
+  }
+
+  /* ---------- Spraak: taal/stijl-opties en stemmen ---------- */
+  const SPEECH_LANGS = [
+    { key:'nl-NL', label:'Nederlands' },
+    { key:'nl-BE', label:'Vlaams' },
+    { key:'en-GB', label:'Engels (UK)' },
+    { key:'en-US', label:'Engels (US)' },
+    { key:'fr-FR', label:'Frans' },
+    { key:'de-DE', label:'Duits' },
+  ];
+  const DIGIT_WORDS = {
+    nl: ['nul','een','twee','drie','vier','vijf','zes','zeven','acht','negen'],
+    en: ['zero','one','two','three','four','five','six','seven','eight','nine'],
+    fr: ['zéro','un','deux','trois','quatre','cinq','six','sept','huit','neuf'],
+    de: ['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun'],
+  };
+  const WORD_TABLES = {
+    nl: { ones:['nul','een','twee','drie','vier','vijf','zes','zeven','acht','negen','tien','elf','twaalf','dertien','veertien','vijftien','zestien','zeventien','achttien','negentien'],
+          tens:{2:'twintig',3:'dertig',4:'veertig',5:'vijftig',6:'zestig',7:'zeventig',8:'tachtig',9:'negentig'}, joiner:'en' },
+    en: { ones:['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'],
+          tens:{2:'twenty',3:'thirty',4:'forty',5:'fifty',6:'sixty',7:'seventy',8:'eighty',9:'ninety'}, joiner:'-' },
+    fr: { ones:['zéro','un','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze','treize','quatorze','quinze','seize','dix-sept','dix-huit','dix-neuf'],
+          tens:{2:'vingt',3:'trente',4:'quarante',5:'cinquante',6:'soixante',7:'soixante-dix',8:'quatre-vingt',9:'quatre-vingt-dix'}, joiner:'-' },
+    de: { ones:['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'],
+          tens:{2:'zwanzig',3:'dreißig',4:'vierzig',5:'fünfzig',6:'sechzig',7:'siebzig',8:'achtzig',9:'neunzig'}, joiner:'und' },
+  };
+  function langFamily(bcp47){ return bcp47.split('-')[0]; }
+  function numberToWords(n, lang){
+    const fam = langFamily(lang);
+    const t = WORD_TABLES[fam] || WORD_TABLES.en;
+    if(n < 20) return t.ones[n];
+    const tensDigit = Math.floor(n/10), onesDigit = n%10;
+    const tensWord = t.tens[tensDigit] || '';
+    if(onesDigit === 0) return tensWord;
+    if(fam === 'nl' || fam === 'de') return t.ones[onesDigit] + t.joiner + tensWord;
+    if(fam === 'fr') return tensWord + t.joiner + t.ones[onesDigit];
+    return tensWord + t.joiner + t.ones[onesDigit];
+  }
+  function numberToDigitWords(n, lang){
+    const fam = langFamily(lang);
+    const words = DIGIT_WORDS[fam] || DIGIT_WORDS.en;
+    return String(n).split('').map(d => words[parseInt(d,10)]).join(' ');
+  }
+  function announceText(n){
+    return speechStyle === 'together' ? numberToWords(n, speechLang) : numberToDigitWords(n, speechLang);
+  }
+
+  let soundMode = 'beep';
+  let speechLang = 'nl-NL';
+  let speechStyle = 'together';
+  let speechVoiceName = '';
+  let allVoices = [];
+  try{
+    soundMode = localStorage.getItem('bingo2-sound-mode') || 'beep';
+    speechLang = localStorage.getItem('bingo2-speech-lang') || 'nl-NL';
+    speechStyle = localStorage.getItem('bingo2-speech-style') || 'together';
+    speechVoiceName = localStorage.getItem('bingo2-speech-voice') || '';
+  }catch(e){}
+
+  function saveSpeechSettings(){
+    try{
+      localStorage.setItem('bingo2-sound-mode', soundMode);
+      localStorage.setItem('bingo2-speech-lang', speechLang);
+      localStorage.setItem('bingo2-speech-style', speechStyle);
+      localStorage.setItem('bingo2-speech-voice', speechVoiceName);
+    }catch(e){}
+  }
+
+  function setMode(mode){
+    soundMode = mode;
+    modeBeepTab.classList.toggle('active', mode === 'beep');
+    modeSpeechTab.classList.toggle('active', mode === 'speech');
+    speechConfigLink.style.display = mode === 'speech' ? 'inline-block' : 'none';
+    saveSpeechSettings();
+  }
+  modeBeepTab.onclick = () => setMode('beep');
+  modeSpeechTab.onclick = () => setMode('speech');
+  setMode(soundMode);
+
+  function buildLangGrid(){
+    speechLangGrid.innerHTML = '';
+    SPEECH_LANGS.forEach(l => {
+      const btn = document.createElement('div');
+      btn.className = 'lang-btn' + (l.key === speechLang ? ' active' : '');
+      btn.textContent = l.label;
+      btn.onclick = () => {
+        speechLang = l.key;
+        speechLangGrid.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        populateVoices();
+        saveSpeechSettings();
+      };
+      speechLangGrid.appendChild(btn);
+    });
+  }
+  buildLangGrid();
+
+  function setStyle(style){
+    speechStyle = style;
+    speechStyleTogether.classList.toggle('active', style === 'together');
+    speechStyleDigits.classList.toggle('active', style === 'digits');
+    saveSpeechSettings();
+  }
+  speechStyleTogether.onclick = () => setStyle('together');
+  speechStyleDigits.onclick = () => setStyle('digits');
+  setStyle(speechStyle);
+
+  function populateVoices(){
+    speechVoiceSelect.innerHTML = '';
+    let matches = allVoices.filter(v => v.lang.toLowerCase() === speechLang.toLowerCase());
+    if(matches.length === 0){
+      const fam = langFamily(speechLang);
+      matches = allVoices.filter(v => v.lang.toLowerCase().startsWith(fam));
+    }
+    if(matches.length === 0){
+      speechVoiceHint.textContent = 'Geen stem gevonden voor deze taal op dit toestel — het systeem gebruikt dan de standaardstem.';
+      const opt = document.createElement('option');
+      opt.textContent = '— standaardstem —';
+      speechVoiceSelect.appendChild(opt);
+      return;
+    }
+    speechVoiceHint.textContent = matches.length + ' stem(men) gevonden op dit toestel.';
+    matches.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.lang + ')';
+      if(v.name === speechVoiceName) opt.selected = true;
+      speechVoiceSelect.appendChild(opt);
+    });
+  }
+  speechVoiceSelect.onchange = () => { speechVoiceName = speechVoiceSelect.value; saveSpeechSettings(); };
+
+  function loadVoices(){
+    if(!('speechSynthesis' in window)) return;
+    allVoices = speechSynthesis.getVoices();
+    populateVoices();
+  }
+  if('speechSynthesis' in window){
+    loadVoices();
+    if('onvoiceschanged' in speechSynthesis) speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
+  speechConfigLink.onclick = (e) => { e.preventDefault(); speechOverlay.classList.add('active'); };
+  speechClose.onclick = () => { speechOverlay.classList.remove('active'); };
+  speechOverlay.addEventListener('click', (e) => { if(e.target === speechOverlay) speechOverlay.classList.remove('active'); });
+  speechPreviewBtn.onclick = () => { speakNumber(74); };
+
+  function speakNumber(n){
+    if(!('speechSynthesis' in window)) return;
+    try{
+      speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(announceText(n));
+      utter.lang = speechLang;
+      const chosen = allVoices.find(v => v.name === speechVoiceName);
+      if(chosen) utter.voice = chosen;
+      speechSynthesis.speak(utter);
+    }catch(e){}
+  }
+
+  function playAnnounce(n){
+    if(soundMode === 'speech') speakNumber(n);
+    else playPing();
   }
 
   function buildGrid(){
@@ -824,7 +1052,7 @@
     void ball.offsetWidth;
     ball.classList.add('pop');
 
-    playPing();
+    playAnnounce(n);
     updateTrail();
     countLabel.textContent = called.size + ' / ' + maxNumber;
     statusLine.textContent = called.size + ' van ' + maxNumber + ' getrokken';
@@ -929,6 +1157,13 @@
     buildGrid();
     setRingIdle();
     try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+    if(soundMode === 'speech' && 'speechSynthesis' in window){
+      try{
+        const unlock = new SpeechSynthesisUtterance(' ');
+        unlock.volume = 0;
+        speechSynthesis.speak(unlock);
+      }catch(e){}
+    }
   };
 
   rangeConfirmYes.onclick = () => {
